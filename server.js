@@ -6,7 +6,15 @@ const connectDB = require('./config/db');
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-app.use(cors());
+// Configure CORS for specific frontend domain
+const corsOptions = {
+  origin: process.env.FRONTEND_URL || 'https://levitica-mangement.netlify.app',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Health check – confirms backend is running
