@@ -34,6 +34,7 @@ router.post('/', async (req, res) => {
       technical: body.technical || 'Not Yet',
       hrRound: body.hrRound || 'Not Yet',
       offer: body.offer || '—',
+      salary: body.salary ?? '',
       onboarding: body.onboarding ?? null,
       joiningDate: body.joiningDate ?? null,
       referredBy: body.referredBy ?? null,
@@ -64,6 +65,7 @@ router.post('/bulk', async (req, res) => {
       technical: c.technical || 'Not Yet',
       hrRound: c.hrRound || 'Not Yet',
       offer: c.offer || '—',
+      salary: c.salary ?? '',
       onboarding: c.onboarding ?? null,
       joiningDate: c.joiningDate ?? null,
       referredBy: c.referredBy ?? null,
@@ -94,6 +96,7 @@ router.put('/:id', async (req, res) => {
     if (body.technical !== undefined) set.technical = body.technical;
     if (body.hrRound !== undefined) set.hrRound = body.hrRound;
     if (body.offer !== undefined) set.offer = body.offer;
+    if (body.salary !== undefined) set.salary = body.salary;
     if (body.onboarding !== undefined) set.onboarding = body.onboarding;
     if (body.joiningDate !== undefined) set.joiningDate = body.joiningDate;
     if (body.referredBy !== undefined) set.referredBy = body.referredBy;

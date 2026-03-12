@@ -29,6 +29,7 @@ const candidateSchema = new mongoose.Schema(
     technical: { type: String, default: 'Not Yet', trim: true },
     hrRound: { type: String, default: 'Not Yet', trim: true },
     offer: { type: String, default: '—', trim: true },
+    salary: { type: String, default: '', trim: true },
     onboarding: { type: String, default: null },
     joiningDate: { type: String, default: null },
     referredBy: { type: referredBySchema, default: null },

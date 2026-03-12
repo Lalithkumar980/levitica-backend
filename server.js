@@ -47,11 +47,13 @@ const expensesRoutes = require('./routes/expenses');
 const paymentsRoutes = require('./routes/payments');
 const financeReportsRoutes = require('./routes/financeReports');
 const hrRoutes = require('./routes/hr');
+const trainingFeesRoutes = require('./routes/trainingFees');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/candidates', candidateRoutes);
 app.use('/api/hr', hrRoutes);
+app.use('/api/training-fees', trainingFeesRoutes);
 
 // Protected API routes — verifyToken applied at app level
 app.use('/api/v1/leads', verifyToken, leadsRoutes);
