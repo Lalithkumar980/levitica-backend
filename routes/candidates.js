@@ -110,4 +110,16 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+/** DELETE /api/candidates/:id — delete single candidate */
+router.delete('/:id', async (req, res) => {
+  try {
+    const doc = await Candidate.findByIdAndDelete(req.params.id);
+    if (!doc) return res.status(404).json({ message: 'Candidate not found' });
+    res.json({ message: 'Deleted' });
+  } catch (err) {
+    console.error('Candidate delete error:', err);
+    res.status(500).json({ message: err.message || 'Failed to delete candidate' });
+  }
+});
+
 module.exports = router;
