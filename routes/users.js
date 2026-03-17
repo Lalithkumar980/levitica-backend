@@ -3,6 +3,7 @@ const router = express.Router();
 const User = require('../models/User');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { decrypt } = require('../utils/encrypt');
+const { profilePhotoUpload } = require('../middleware/upload');
 
 const ROLE_DEFAULTS = {
   Admin: { viewAll: true, delete: true, export: true, admin: true, bulkImport: true, viewReports: true, modules: ['/dashboard', '/leads', '/contacts', '/companies', '/deals -6'] },
@@ -20,6 +21,99 @@ const ROLE_CLASS_MAP = {
   'Finance Management': 'bg-sky-100 text-sky-700',
   'Sales Rep': 'bg-amber-100 text-amber-700',
 };
+
+function toProfileJson(user) {
+  const obj = user.toJSON ? user.toJSON() : { ...user, id: (user._id || user.id).toString() };
+  obj.profilePhotoUrl = user.profilePhoto
+    ? `/api/uploads/profiles/${user.profilePhoto}`
+    : null;
+  return obj;
+}
+
+/** GET /api/users/me — current user profile (no password); credentials visible read-only */
+router.get('/me', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).lean();
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    const id = user._id.toString();
+    const initials = (user.name || '').trim().split(/\s+/);
+    const initialsStr = initials.length >= 2
+      ? (initials[0][0] + initials[initials.length - 1][0]).toUpperCase()
+      : (initials[0] || '').slice(0, 2).toUpperCase() || '—';
+    res.json({
+      id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      department: user.department,
+      initials: initialsStr,
+      profilePhotoUrl: user.profilePhoto ? `/api/uploads/profiles/${user.profilePhoto}` : null,
+      phone: user.phone || '',
+      city: user.city || '',
+      company: user.company || '',
+      experience: user.experience || '',
+      skills: user.skills || '',
+      hobbies: user.hobbies || '',
+      bio: user.bio || '',
+    });
+  } catch (err) {
+    console.error('Get profile error:', err);
+    res.status(500).json({ message: 'Failed to get profile' });
+  }
+});
+
+/** PUT /api/users/me — update own profile: name, phone, city, company, experience, skills, hobbies, bio (no credentials) */
+const ME_EDIT_FIELDS = ['name', 'phone', 'city', 'company', 'experience', 'skills', 'hobbies', 'bio'];
+router.put('/me', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    const body = req.body || {};
+    for (const key of ME_EDIT_FIELDS) {
+      if (body[key] != null) {
+        const val = String(body[key]).trim();
+        user[key] = (key === 'name' && !val) ? (user.name || '') : val;
+      }
+    }
+    await user.save();
+    const out = toProfileJson(user);
+    out.phone = user.phone || '';
+    out.city = user.city || '';
+    out.company = user.company || '';
+    out.experience = user.experience || '';
+    out.skills = user.skills || '';
+    out.hobbies = user.hobbies || '';
+    out.bio = user.bio || '';
+    res.json(out);
+  } catch (err) {
+    console.error('Update profile error:', err);
+    res.status(500).json({ message: 'Failed to update profile' });
+  }
+});
+
+/** POST /api/users/me/photo — upload profile photo (multipart form, field: photo) */
+router.post('/me/photo', authenticate, (req, res, next) => {
+  profilePhotoUpload(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ message: err.message || 'Invalid file' });
+    }
+    next();
+  });
+}, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!req.file || !req.file.filename) {
+      return res.status(400).json({ message: 'No photo file received' });
+    }
+    user.profilePhoto = req.file.filename;
+    await user.save();
+    res.json(toProfileJson(user));
+  } catch (err) {
+    console.error('Update profile photo error:', err);
+    res.status(500).json({ message: 'Failed to update profile photo' });
+  }
+});
 
 /** GET /api/users — list all users (admin only); includes decrypted password for admin view */
 router.get('/', authenticate, requireAdmin, async (req, res) => {

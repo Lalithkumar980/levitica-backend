@@ -1,6 +1,7 @@
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const connectDB = require('./config/db');
 
 const app = express();
@@ -20,6 +21,9 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use(express.json());
+
+// Serve uploaded profile photos
+app.use('/api/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Health check – confirms backend is running
 app.get('/api/health', (req, res) => {

@@ -25,6 +25,9 @@ router.post('/login', async (req, res) => {
       { expiresIn: '7d' }
     );
     const userJson = user.toJSON();
+    const profilePhotoUrl = user.profilePhoto
+      ? `/api/uploads/profiles/${user.profilePhoto}`
+      : null;
     res.json({
       token,
       user: {
@@ -34,6 +37,7 @@ router.post('/login', async (req, res) => {
         role: userJson.role,
         initials: userJson.initials,
         department: userJson.department,
+        profilePhotoUrl,
         viewAll: userJson.viewAll,
         delete: userJson.delete,
         export: userJson.export,

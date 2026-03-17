@@ -17,6 +17,15 @@ const userSchema = new mongoose.Schema(
     bulkImport: { type: Boolean, default: false },
     viewReports: { type: Boolean, default: true },
     modules: { type: [String], default: [] },
+    profilePhoto: { type: String, default: null, trim: true },
+    // Profile page (edit by user)
+    phone: { type: String, default: '', trim: true },
+    city: { type: String, default: '', trim: true },
+    company: { type: String, default: '', trim: true },
+    experience: { type: String, default: '', trim: true },
+    skills: { type: String, default: '', trim: true },
+    hobbies: { type: String, default: '', trim: true },
+    bio: { type: String, default: '', trim: true },
   },
   { timestamps: true }
 );
