@@ -33,13 +33,19 @@ function toProfileJson(user) {
 /** GET /api/users/me — current user profile (no password); credentials visible read-only */
 router.get('/me', authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).lean();
+    const user = await User.findById(req.user._id).select('+passwordEncrypted').lean();
     if (!user) return res.status(404).json({ message: 'User not found' });
     const id = user._id.toString();
     const initials = (user.name || '').trim().split(/\s+/);
     const initialsStr = initials.length >= 2
       ? (initials[0][0] + initials[initials.length - 1][0]).toUpperCase()
       : (initials[0] || '').slice(0, 2).toUpperCase() || '—';
+    let passwordDisplay = '';
+    try {
+      if (user.passwordEncrypted) passwordDisplay = decrypt(user.passwordEncrypted) || '';
+    } catch (e) {
+      // ignore decrypt errors (e.g. legacy data)
+    }
     res.json({
       id,
       name: user.name,
@@ -48,13 +54,17 @@ router.get('/me', authenticate, async (req, res) => {
       department: user.department,
       initials: initialsStr,
       profilePhotoUrl: user.profilePhoto ? `/api/uploads/profiles/${user.profilePhoto}` : null,
+      passwordDisplay,
       phone: user.phone || '',
       city: user.city || '',
+      address: user.address || '',
       company: user.company || '',
       experience: user.experience || '',
       skills: user.skills || '',
       hobbies: user.hobbies || '',
       bio: user.bio || '',
+      dob: user.dob ? new Date(user.dob).toISOString().slice(0, 10) : '',
+      companyAssets: user.companyAssets || '',
     });
   } catch (err) {
     console.error('Get profile error:', err);
@@ -62,8 +72,8 @@ router.get('/me', authenticate, async (req, res) => {
   }
 });
 
-/** PUT /api/users/me — update own profile: name, phone, city, company, experience, skills, hobbies, bio (no credentials) */
-const ME_EDIT_FIELDS = ['name', 'phone', 'city', 'company', 'experience', 'skills', 'hobbies', 'bio'];
+/** PUT /api/users/me — update own profile (no credentials) */
+const ME_EDIT_FIELDS = ['name', 'phone', 'city', 'address', 'company', 'experience', 'skills', 'hobbies', 'bio', 'companyAssets', 'dob'];
 router.put('/me', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -71,19 +81,35 @@ router.put('/me', authenticate, async (req, res) => {
     const body = req.body || {};
     for (const key of ME_EDIT_FIELDS) {
       if (body[key] != null) {
-        const val = String(body[key]).trim();
-        user[key] = (key === 'name' && !val) ? (user.name || '') : val;
+        if (key === 'dob') {
+          const raw = String(body.dob).trim();
+          if (!raw) {
+            user.dob = null;
+          } else {
+            const d = new Date(raw);
+            if (Number.isNaN(d.getTime())) {
+              return res.status(400).json({ message: 'Invalid date of birth' });
+            }
+            user.dob = d;
+          }
+        } else {
+          const val = String(body[key]).trim();
+          user[key] = (key === 'name' && !val) ? (user.name || '') : val;
+        }
       }
     }
     await user.save();
     const out = toProfileJson(user);
     out.phone = user.phone || '';
     out.city = user.city || '';
+    out.address = user.address || '';
     out.company = user.company || '';
     out.experience = user.experience || '';
     out.skills = user.skills || '';
     out.hobbies = user.hobbies || '';
     out.bio = user.bio || '';
+    out.companyAssets = user.companyAssets || '';
+    out.dob = user.dob ? new Date(user.dob).toISOString().slice(0, 10) : '';
     res.json(out);
   } catch (err) {
     console.error('Update profile error:', err);

@@ -26,6 +26,9 @@ const userSchema = new mongoose.Schema(
     skills: { type: String, default: '', trim: true },
     hobbies: { type: String, default: '', trim: true },
     bio: { type: String, default: '', trim: true },
+    dob: { type: Date, default: null },
+    companyAssets: { type: String, default: '', trim: true },
+    address: { type: String, default: '', trim: true },
   },
   { timestamps: true }
 );
