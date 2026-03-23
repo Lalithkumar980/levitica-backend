@@ -11,6 +11,7 @@ const PORT = process.env.PORT || 5001;
 const corsOptions = {
   origin: [
     "http://localhost:3000",
+     "http://localhost:8081",
     "https://levitica-mangement.netlify.app",
     "https://levitica-data-management.vercel.app",
   ],
