@@ -36,6 +36,7 @@ async function create(req, res) {
       email: body.email, city: body.city, country: body.country, source: body.source, status: body.status,
       tags: body.tags, notes: body.notes, lastContact: body.lastContact, owner: body.owner,
     });
+    if (!payload.owner) payload.owner = req.user._id;
     const doc = await Contact.create(payload);
     res.status(201).json({ message: 'Contact created', contact: doc });
   } catch (err) {

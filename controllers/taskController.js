@@ -45,6 +45,7 @@ async function create(req, res) {
       type: body.type || 'Task', subject: body.subject, dueDate: body.dueDate, priority: body.priority,
       status: body.status, rep: body.rep, dealId: body.dealId, contactId: body.contactId, company: body.company, notes: body.notes,
     }, REP_FIELD);
+    if (!payload.rep) payload.rep = req.user._id;
     const doc = await Task.create(payload);
     const populated = await Task.findById(doc._id)
       .populate('rep', 'name')

@@ -80,6 +80,7 @@ async function create(req, res) {
       outcome: body.outcome, company: body.company, recording: body.recording, rep: body.rep, dealId: body.dealId,
       contactId: body.contactId, followupDate: body.followupDate, followupType: body.followupType,
     }, REP_FIELD);
+    if (!payload.rep) payload.rep = req.user._id;
     const doc = await Activity.create(payload);
     const populated = await Activity.findById(doc._id)
       .populate('rep', 'name')
