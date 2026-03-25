@@ -1,4 +1,5 @@
 const Invoice = require('../models/Invoice');
+const Payment = require('../models/Payment');
 
 const GST_RATE = 0.18;
 
@@ -45,7 +46,30 @@ async function list(req, res) {
       Invoice.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
       Invoice.countDocuments(filter),
     ]);
-    res.json({ items, total, page, pages: Math.ceil(total / limit) || 1 });
+
+    // Attach payment totals to each invoice so the UI can compute
+    // collected vs outstanding (including partial payments).
+    const invoiceNos = (items || []).map((i) => i.invoiceNo).filter(Boolean);
+    let paymentMap = {};
+    if (invoiceNos.length > 0) {
+      const aggs = await Payment.aggregate([
+        { $match: { invoiceRef: { $in: invoiceNos } } },
+        { $group: { _id: '$invoiceRef', totalPaid: { $sum: '$amount' } } },
+      ]);
+      paymentMap = aggs.reduce((acc, a) => {
+        acc[a._id] = a.totalPaid;
+        return acc;
+      }, {});
+    }
+
+    const nextItems = (items || []).map((inv) => {
+      const paidAmount = paymentMap[inv.invoiceNo] ?? 0;
+      const totalNum = Number(inv.total) || 0;
+      const outstanding = Math.max(0, totalNum - paidAmount);
+      return { ...inv, paidAmount, outstanding };
+    });
+
+    res.json({ items: nextItems, total, page, pages: Math.ceil(total / limit) || 1 });
   } catch (err) {
     console.error('Invoices list error:', err);
     res.status(500).json({ message: 'Failed to fetch invoices' });

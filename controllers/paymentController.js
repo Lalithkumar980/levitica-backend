@@ -1,4 +1,6 @@
+const mongoose = require('mongoose');
 const Payment = require('../models/Payment');
+const Invoice = require('../models/Invoice');
 
 function toNumber(v) {
   if (v === undefined || v === null) return undefined;
@@ -22,6 +24,72 @@ function parseDate(v) {
   }
   const d = new Date(s);
   return isNaN(d.getTime()) ? undefined : d;
+}
+
+async function findInvoiceByRef(invoiceRef) {
+  if (!invoiceRef) return null;
+  const ref = String(invoiceRef).trim();
+  if (!ref) return null;
+
+  // Primary: Payment.invoiceRef stores invoiceNo (what UI sends).
+  const byInvoiceNo = await Invoice.findOne({ invoiceNo: ref });
+  if (byInvoiceNo) return byInvoiceNo;
+
+  // Fallback: allow invoiceRef to be an Invoice._id as well.
+  if (mongoose.Types.ObjectId.isValid(ref)) {
+    const byId = await Invoice.findById(ref);
+    if (byId) return byId;
+  }
+  return null;
+}
+
+async function recalculateInvoiceFromPayments(invoiceRef) {
+  if (!invoiceRef) return;
+  const ref = String(invoiceRef).trim();
+  if (!ref) return;
+
+  const invoice = await findInvoiceByRef(ref);
+  if (!invoice) return;
+
+  const total = Number(invoice.total) || 0;
+
+  const [agg] = await Payment.aggregate([
+    { $match: { invoiceRef: ref } },
+    { $group: { _id: null, totalPaid: { $sum: '$amount' } } },
+  ]);
+  const totalPaid = agg?.totalPaid ?? 0;
+
+  const lastPayment = await Payment.findOne({ invoiceRef: ref })
+    .sort({ date: -1, createdAt: -1 })
+    .lean();
+
+  const now = new Date();
+  const hasDueDate = invoice.dueDate instanceof Date && !isNaN(invoice.dueDate.getTime());
+  const isOverdue = hasDueDate && invoice.dueDate.getTime() < now.getTime();
+
+  let newStatus = 'Pending';
+  if (total <= 0) {
+    newStatus = totalPaid > 0 ? 'Paid' : 'Pending';
+  } else if (totalPaid >= total) {
+    newStatus = 'Paid';
+  } else if (totalPaid > 0) {
+    newStatus = 'Partial';
+  } else {
+    newStatus = isOverdue ? 'Overdue' : 'Pending';
+  }
+
+  invoice.status = newStatus;
+
+  if (newStatus === 'Paid' || newStatus === 'Partial') {
+    invoice.paidDate = lastPayment?.date || now;
+    invoice.paymentMethod = (lastPayment?.method || '').toString().trim();
+  } else {
+    // Clear stale payment info when invoice is not paid.
+    invoice.paidDate = undefined;
+    invoice.paymentMethod = '';
+  }
+
+  await invoice.save();
 }
 
 async function list(req, res) {
@@ -73,6 +141,7 @@ async function create(req, res) {
       notes: body.notes != null ? String(body.notes).trim() : '',
     };
     const doc = await Payment.create(payload);
+    await recalculateInvoiceFromPayments(payload.invoiceRef);
     res.status(201).json(doc);
   } catch (err) {
     console.error('Payment create error:', err);
@@ -84,6 +153,7 @@ async function update(req, res) {
   try {
     const doc = await Payment.findById(req.params.id);
     if (!doc) return res.status(404).json({ message: 'Payment not found' });
+    const oldInvoiceRef = doc.invoiceRef;
     const body = req.body || {};
     if (body.client !== undefined) doc.client = String(body.client).trim();
     if (body.amount !== undefined) doc.amount = toNumber(body.amount) ?? 0;
@@ -94,6 +164,8 @@ async function update(req, res) {
     if (body.invoiceRef !== undefined) doc.invoiceRef = String(body.invoiceRef).trim();
     if (body.notes !== undefined) doc.notes = String(body.notes).trim();
     await doc.save();
+    await recalculateInvoiceFromPayments(oldInvoiceRef);
+    if (doc.invoiceRef !== oldInvoiceRef) await recalculateInvoiceFromPayments(doc.invoiceRef);
     res.json(doc);
   } catch (err) {
     console.error('Payment update error:', err);
@@ -105,6 +177,7 @@ async function remove(req, res) {
   try {
     const doc = await Payment.findByIdAndDelete(req.params.id);
     if (!doc) return res.status(404).json({ message: 'Payment not found' });
+    await recalculateInvoiceFromPayments(doc.invoiceRef);
     res.json({ message: 'Payment deleted', id: doc._id });
   } catch (err) {
     console.error('Payment delete error:', err);
