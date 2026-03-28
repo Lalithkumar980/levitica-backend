@@ -2,18 +2,23 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-/** Multer config for file uploads (memory storage). Use for CSV import, etc. */
+const LEAD_IMPORT_EXT = /\.(csv|xlsx|xls)$/i;
+
+/** Multer config for lead import (CSV or Excel, memory storage). */
 const csvUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
   fileFilter: (req, file, cb) => {
-    const ok = /\.csv$/i.test(file.originalname) || file.mimetype === 'text/csv';
-    if (ok) cb(null, true);
-    else cb(new Error('Only CSV files are allowed'), false);
+    const nameOk = LEAD_IMPORT_EXT.test(file.originalname);
+    const mimeOk =
+      /^(text\/csv|application\/csv|application\/vnd\.ms-excel)$/i.test(file.mimetype || '') ||
+      file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    if (nameOk || mimeOk) cb(null, true);
+    else cb(new Error('Only CSV or Excel (.csv, .xlsx, .xls) files are allowed'), false);
   },
 });
 
-/** Single file field name for lead CSV import */
+/** Single file field name for lead import (CSV / XLSX / XLS) */
 const uploadLeadsCsv = csvUpload.single('file');
 
 /** Profile photo: disk storage, images only, max 2MB. Saves to uploads/profiles. */

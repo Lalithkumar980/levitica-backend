@@ -1,5 +1,7 @@
+const path = require('path');
 const { Readable } = require('stream');
 const csv = require('csv-parser');
+const XLSX = require('xlsx');
 const Lead = require('../models/Lead');
 const ImportHistory = require('../models/ImportHistory');
 
@@ -130,20 +132,43 @@ async function getHistory(req, res) {
   }
 }
 
+/** Parse uploaded buffer to array of row objects (header keys), for CSV or Excel. */
+function rowsFromImportFile(buffer, originalname) {
+  const ext = path.extname(originalname || '').toLowerCase();
+  if (ext === '.xlsx' || ext === '.xls') {
+    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    if (!workbook.SheetNames.length) return [];
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    return XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+  }
+  return new Promise((resolve, reject) => {
+    const results = [];
+    Readable.from(buffer)
+      .pipe(csv({ skipLines: 0 }))
+      .on('data', (row) => results.push(row))
+      .on('end', () => resolve(results))
+      .on('error', reject);
+  });
+}
+
 async function uploadLeadsCsv(req, res) {
   try {
     if (!req.file || !req.file.buffer) {
-      return res.status(400).json({ message: 'No CSV file uploaded. Use multipart/form-data with field "file".' });
+      return res.status(400).json({ message: 'No file uploaded. Use multipart/form-data with field "file".' });
     }
-    const rows = await new Promise((resolve, reject) => {
-      const results = [];
-      Readable.from(req.file.buffer)
-        .pipe(csv({ skipLines: 0 }))
-        .on('data', (row) => results.push(row))
-        .on('end', () => resolve(results))
-        .on('error', reject);
-    });
-    if (rows.length === 0) return res.status(400).json({ message: 'CSV has no data rows' });
+    let rows;
+    try {
+      rows = await rowsFromImportFile(req.file.buffer, req.file.originalname);
+    } catch (readErr) {
+      return res.status(400).json({ message: readErr.message || 'Could not read file' });
+    }
+    rows = rows.filter(
+      (row) =>
+        row &&
+        typeof row === 'object' &&
+        Object.values(row).some((v) => v != null && String(v).trim() !== '')
+    );
+    if (rows.length === 0) return res.status(400).json({ message: 'File has no data rows' });
 
     const ownerId = req.user._id;
     const results = [];
