@@ -43,8 +43,36 @@ const profilePhotoUpload = multer({
   },
 }).single('photo');
 
+/** Candidate resumes: disk storage under uploads/resumes, max 5MB, PDF/DOC/DOCX. */
+const resumesDir = path.join(__dirname, '..', 'uploads', 'resumes');
+if (!fs.existsSync(resumesDir)) {
+  fs.mkdirSync(resumesDir, { recursive: true });
+}
+const resumeStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, resumesDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname || '') || '.pdf';
+    const safe = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    cb(null, `${safe}${ext}`);
+  },
+});
+const resumeUpload = multer({
+  storage: resumeStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const nameOk = /\.(pdf|doc|docx)$/i.test(file.originalname || '');
+    const mimeOk =
+      file.mimetype === 'application/pdf' ||
+      file.mimetype === 'application/msword' ||
+      file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    if (nameOk || mimeOk) cb(null, true);
+    else cb(new Error('Only PDF, DOC, or DOCX files are allowed (max 5MB)'), false);
+  },
+}).single('resume');
+
 module.exports = {
   csvUpload,
   uploadLeadsCsv,
   profilePhotoUpload,
+  resumeUpload,
 };

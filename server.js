@@ -7,17 +7,44 @@ const connectDB = require('./config/db');
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-// Configure CORS for specific frontend domain
+/** Allow typical home/LAN dev URLs (new Wi‑Fi = new IP; no need to edit this each time). */
+function isPrivateLanOrigin(origin) {
+  if (!origin || typeof origin !== 'string') return false;
+  try {
+    const u = new URL(origin);
+    if (u.protocol !== 'http:') return false;
+    const h = u.hostname;
+    if (h === 'localhost' || h === '127.0.0.1') return true;
+    const parts = h.split('.').map(Number);
+    if (parts.length !== 4 || parts.some((n) => Number.isNaN(n))) return false;
+    const [a, b] = parts;
+    if (a === 10) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+const fixedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:8081',
+  'https://levitica-mangement.netlify.app',
+  'https://levitica-data-management.vercel.app',
+];
+
+// Configure CORS for production hosts + same Wi‑Fi / LAN (192.168.x.x, 10.x.x.x, etc.)
 const corsOptions = {
-  origin: [
-    "http://localhost:3000",
-     "http://localhost:8081",
-    "https://levitica-mangement.netlify.app",
-    "https://levitica-data-management.vercel.app",
-  ],
+  origin: (origin, cb) => {
+    if (!origin || fixedOrigins.includes(origin) || isPrivateLanOrigin(origin)) {
+      return cb(null, true);
+    }
+    return cb(null, false);
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization'],
 };
 
 app.use(cors(corsOptions));

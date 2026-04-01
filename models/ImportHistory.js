@@ -42,7 +42,7 @@ const ImportHistorySchema = new mongoose.Schema(
     },
     errors: [errorEntrySchema],
   },
-  { timestamps: true }
+  { timestamps: true, suppressReservedKeysWarning: true }
 );
 
 module.exports = mongoose.model('ImportHistory', ImportHistorySchema);

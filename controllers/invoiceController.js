@@ -1,7 +1,7 @@
 const Invoice = require('../models/Invoice');
 const Payment = require('../models/Payment');
 
-const GST_RATE = 0.18;
+const DEFAULT_GST_RATE = 18;
 
 function toNumber(v) {
   if (v === undefined || v === null) return undefined;
@@ -25,6 +25,25 @@ function parseDate(v) {
   }
   const d = new Date(s);
   return isNaN(d.getTime()) ? undefined : d;
+}
+
+function normalizeGstRate(v) {
+  const n = toNumber(v);
+  if (n === undefined) return DEFAULT_GST_RATE;
+  if (n < 0) return 0;
+  if (n > 100) return 100;
+  return n;
+}
+
+async function generateInvoiceNo() {
+  const latest = await Invoice.findOne({ invoiceNo: /INV-\d+/i })
+    .sort({ createdAt: -1 })
+    .lean();
+  if (!latest?.invoiceNo) return 'INV-00001';
+  const match = String(latest.invoiceNo).match(/INV-(\d+)/i);
+  const current = match ? Number(match[1]) : 0;
+  const next = (Number.isFinite(current) ? current : 0) + 1;
+  return `INV-${String(next).padStart(5, '0')}`;
 }
 
 async function list(req, res) {
@@ -91,14 +110,17 @@ async function create(req, res) {
   try {
     const body = req.body || {};
     const baseAmount = toNumber(body.baseAmount) ?? 0;
-    const gst = Math.round(baseAmount * GST_RATE);
+    const gstRate = normalizeGstRate(body.gstRate);
+    const gst = Math.round((baseAmount * gstRate) / 100);
     const total = baseAmount + gst;
+    const invoiceNoRaw = body.invoiceNo != null ? String(body.invoiceNo).trim() : '';
     const payload = {
-      invoiceNo: body.invoiceNo != null ? String(body.invoiceNo).trim() : '',
+      invoiceNo: invoiceNoRaw || (await generateInvoiceNo()),
       client: body.client != null ? String(body.client).trim() : '',
       type: body.type === 'Training' ? 'Training' : 'Company',
       category: body.category === 'Expense' ? 'Expense' : 'Revenue',
       baseAmount,
+      gstRate,
       gst,
       total,
       status: ['Pending', 'Paid', 'Overdue', 'Partial'].includes(body.status) ? body.status : 'Pending',
@@ -125,10 +147,15 @@ async function update(req, res) {
     if (body.client !== undefined) doc.client = String(body.client).trim();
     if (body.type !== undefined) doc.type = body.type === 'Training' ? 'Training' : 'Company';
     if (body.category !== undefined) doc.category = body.category === 'Expense' ? 'Expense' : 'Revenue';
-    if (body.baseAmount !== undefined) {
-      const baseAmount = toNumber(body.baseAmount) ?? 0;
-      doc.baseAmount = baseAmount;
-      doc.gst = Math.round(baseAmount * GST_RATE);
+    const hasBaseAmount = body.baseAmount !== undefined;
+    const hasGstRate = body.gstRate !== undefined;
+    if (hasBaseAmount) doc.baseAmount = toNumber(body.baseAmount) ?? 0;
+    if (hasGstRate) doc.gstRate = normalizeGstRate(body.gstRate);
+    if (hasBaseAmount || hasGstRate) {
+      const baseAmount = Number(doc.baseAmount) || 0;
+      const gstRate = normalizeGstRate(doc.gstRate);
+      doc.gstRate = gstRate;
+      doc.gst = Math.round((baseAmount * gstRate) / 100);
       doc.total = baseAmount + doc.gst;
     }
     if (body.status !== undefined && ['Pending', 'Paid', 'Overdue', 'Partial'].includes(body.status)) doc.status = body.status;
