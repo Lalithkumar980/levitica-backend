@@ -66,7 +66,7 @@ router.get('/', async (req, res) => {
       ];
     }
 
-    const list = await Candidate.find(filter).sort({ createdAt: -1 }).lean();
+    const list = await Candidate.find(filter).sort({ createdAt: 1 }).lean();
     res.json({ candidates: list.map(leanToClient) });
   } catch (err) {
     console.error('Candidates list error:', err);
