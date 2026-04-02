@@ -342,6 +342,52 @@ router.patch('/:id/stage', async (req, res) => {
   }
 });
 
+const FEEDBACK_RECOMMENDATIONS = ['Hire', 'Reject', 'Hold'];
+
+/** POST /api/candidates/:id/feedback — append pipeline interview feedback (HR pipeline modal) */
+router.post('/:id/feedback', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isValidObjectId(id)) {
+      return res.status(404).json({ message: 'Candidate not found' });
+    }
+    const { interviewer, round, rating, recommendation, comments } = req.body || {};
+
+    if (!interviewer || typeof interviewer !== 'string' || !interviewer.trim()) {
+      return res.status(400).json({ message: 'Interviewer name is required.' });
+    }
+    if (!PIPELINE_STAGES.includes(round)) {
+      return res.status(400).json({ message: 'Invalid round.' });
+    }
+    const ratingNum = parseInt(rating, 10);
+    if (Number.isNaN(ratingNum) || ratingNum < 1 || ratingNum > 5) {
+      return res.status(400).json({ message: 'Rating must be between 1 and 5.' });
+    }
+    const rec = String(recommendation || '').trim();
+    if (!FEEDBACK_RECOMMENDATIONS.includes(rec)) {
+      return res.status(400).json({ message: 'Recommendation must be Hire, Reject, or Hold.' });
+    }
+
+    const doc = await Candidate.findById(id);
+    if (!doc) return res.status(404).json({ message: 'Candidate not found' });
+
+    doc.feedback.push({
+      interviewer: interviewer.trim(),
+      round,
+      rating: ratingNum,
+      recommendation: rec,
+      comments: typeof comments === 'string' ? comments.trim() : '',
+    });
+    await doc.save();
+
+    const plain = doc.toObject();
+    res.json(leanToClient(plain));
+  } catch (err) {
+    console.error('Candidate feedback error:', err);
+    res.status(500).json({ message: err.message || 'Failed to save feedback' });
+  }
+});
+
 /** GET /api/candidates/:id — single candidate */
 router.get('/:id', async (req, res) => {
   try {

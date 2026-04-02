@@ -19,6 +19,17 @@ const recruiterSchema = new mongoose.Schema(
 
 const PIPELINE_STAGES = ['Screening', 'Tech Round 1', 'Tech Round 2', 'HR Round', 'Final Decision'];
 
+const feedbackEntrySchema = new mongoose.Schema(
+  {
+    interviewer: { type: String, trim: true, default: '' },
+    round: { type: String, enum: PIPELINE_STAGES, required: true },
+    rating: { type: Number, min: 1, max: 5, required: true },
+    recommendation: { type: String, enum: ['Hire', 'Reject', 'Hold'], required: true },
+    comments: { type: String, default: '', trim: true },
+  },
+  { timestamps: true }
+);
+
 const candidateSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
@@ -60,6 +71,9 @@ const candidateSchema = new mongoose.Schema(
     },
     resumeUrl: { type: String, default: '' },
     resumeFilename: { type: String, default: '' },
+
+    /** Pipeline interview feedback (modal → POST /api/candidates/:id/feedback) */
+    feedback: { type: [feedbackEntrySchema], default: [] },
   },
   { timestamps: true }
 );
