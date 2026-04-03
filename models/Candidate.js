@@ -17,12 +17,14 @@ const recruiterSchema = new mongoose.Schema(
   { _id: false }
 );
 
-const PIPELINE_STAGES = ['Screening', 'Tech Round 1', 'Tech Round 2', 'HR Round', 'Final Decision'];
+/** Interview rounds only (feedback); not a round label. */
+const PIPELINE_FEEDBACK_ROUNDS = ['Screening', 'Tech Round 1', 'Tech Round 2', 'HR Round', 'Final Decision'];
+const PIPELINE_STAGES = [...PIPELINE_FEEDBACK_ROUNDS, 'Rejected'];
 
 const feedbackEntrySchema = new mongoose.Schema(
   {
     interviewer: { type: String, trim: true, default: '' },
-    round: { type: String, enum: PIPELINE_STAGES, required: true },
+    round: { type: String, enum: PIPELINE_FEEDBACK_ROUNDS, required: true },
     rating: { type: Number, min: 1, max: 5, required: true },
     recommendation: { type: String, enum: ['Hire', 'Reject', 'Hold'], required: true },
     comments: { type: String, default: '', trim: true },

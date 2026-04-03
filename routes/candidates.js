@@ -9,7 +9,8 @@ function isValidObjectId(id) {
   return mongoose.Types.ObjectId.isValid(id) && String(new mongoose.Types.ObjectId(id)) === String(id);
 }
 
-const PIPELINE_STAGES = ['Screening', 'Tech Round 1', 'Tech Round 2', 'HR Round', 'Final Decision'];
+const PIPELINE_FEEDBACK_ROUNDS = ['Screening', 'Tech Round 1', 'Tech Round 2', 'HR Round', 'Final Decision'];
+const PIPELINE_STAGES = [...PIPELINE_FEEDBACK_ROUNDS, 'Rejected'];
 const SOURCE_OPTIONS = ['Consultant', 'Job Portal', 'Direct'];
 
 router.use(authenticate);
@@ -35,7 +36,19 @@ function leanToClient(doc) {
   delete o._id;
   delete o.__v;
   if (!o.pipelineStage || !PIPELINE_STAGES.includes(o.pipelineStage)) o.pipelineStage = 'Screening';
+  // Align list/UI: terminal reject is one concept across stage + offer (response shape only).
+  if (o.offer === 'Rejected' && o.pipelineStage !== 'Rejected') o.pipelineStage = 'Rejected';
+  if (o.pipelineStage === 'Rejected') o.offer = 'Rejected';
   return o;
+}
+
+function syncOfferWithStage(doc) {
+  if (!doc) return;
+  if (doc.pipelineStage === 'Rejected') {
+    doc.offer = 'Rejected';
+  } else if (doc.offer === 'Rejected' && PIPELINE_FEEDBACK_ROUNDS.includes(doc.pipelineStage)) {
+    doc.offer = '—';
+  }
 }
 
 function normalizeSource(v) {
@@ -329,12 +342,11 @@ router.patch('/:id/stage', async (req, res) => {
     if (!PIPELINE_STAGES.includes(stage)) {
       return res.status(400).json({ message: 'Invalid pipeline stage.' });
     }
-    const doc = await Candidate.findByIdAndUpdate(
-      req.params.id,
-      { $set: { pipelineStage: stage } },
-      { new: true, runValidators: true }
-    );
+    const doc = await Candidate.findById(req.params.id);
     if (!doc) return res.status(404).json({ message: 'Candidate not found' });
+    doc.pipelineStage = stage;
+    syncOfferWithStage(doc);
+    await doc.save();
     res.json(doc.toJSON());
   } catch (err) {
     console.error('Candidate stage update error:', err);
@@ -356,7 +368,7 @@ router.post('/:id/feedback', async (req, res) => {
     if (!interviewer || typeof interviewer !== 'string' || !interviewer.trim()) {
       return res.status(400).json({ message: 'Interviewer name is required.' });
     }
-    if (!PIPELINE_STAGES.includes(round)) {
+    if (!PIPELINE_FEEDBACK_ROUNDS.includes(round)) {
       return res.status(400).json({ message: 'Invalid round.' });
     }
     const ratingNum = parseInt(rating, 10);
@@ -378,6 +390,10 @@ router.post('/:id/feedback', async (req, res) => {
       recommendation: rec,
       comments: typeof comments === 'string' ? comments.trim() : '',
     });
+    if (rec === 'Reject') {
+      doc.pipelineStage = 'Rejected';
+      doc.offer = 'Rejected';
+    }
     await doc.save();
 
     const plain = doc.toObject();
