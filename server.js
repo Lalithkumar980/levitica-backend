@@ -2,9 +2,11 @@ require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const mongoose = require('mongoose');
 const connectDB = require('./config/db');
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 5001;
 
 /** Allow typical home/LAN dev URLs (new Wi‑Fi = new IP; no need to edit this each time). */
@@ -34,12 +36,32 @@ const fixedOrigins = [
   'https://levitica-data-management.vercel.app',
 ];
 
+/** Extra origins from env: ALLOWED_ORIGINS=a.com,b.com or single FRONTEND_URL */
+function envOriginsList() {
+  const raw = process.env.ALLOWED_ORIGINS || process.env.FRONTEND_URL || '';
+  return raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function isVercelPreviewOrigin(origin) {
+  try {
+    const host = new URL(origin).hostname;
+    return host === 'vercel.app' || host.endsWith('.vercel.app');
+  } catch {
+    return false;
+  }
+}
+
 // Configure CORS for production hosts + same Wi‑Fi / LAN (192.168.x.x, 10.x.x.x, etc.)
 const corsOptions = {
   origin: (origin, cb) => {
-    if (!origin || fixedOrigins.includes(origin) || isPrivateLanOrigin(origin)) {
-      return cb(null, true);
-    }
+    if (!origin) return cb(null, true);
+    if (fixedOrigins.includes(origin)) return cb(null, true);
+    if (envOriginsList().includes(origin)) return cb(null, true);
+    if (isPrivateLanOrigin(origin)) return cb(null, true);
+    if (isVercelPreviewOrigin(origin)) return cb(null, true);
     return cb(null, false);
   },
   credentials: true,
@@ -61,6 +83,20 @@ app.use('/api/uploads', express.static(path.join(__dirname, 'uploads')));
 // Health check – confirms backend is running
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Backend is running' });
+});
+
+// DB health — use on Render to confirm the same MongoDB database name as local (login users live here)
+app.get('/api/health/db', (req, res) => {
+  const ready = mongoose.connection.readyState;
+  const labels = { 0: 'disconnected', 1: 'connected', 2: 'connecting', 3: 'disconnecting' };
+  res.json({
+    mongoState: labels[ready] ?? ready,
+    dbName: mongoose.connection.name || null,
+    hint:
+      ready === 1
+        ? 'Login uses this dbName; users must exist in the `users` collection.'
+        : 'MongoDB not connected — check MONGODB_URI on Render.',
+  });
 });
 
 const { verifyToken } = require('./middleware/auth');

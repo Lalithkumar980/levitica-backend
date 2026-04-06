@@ -15,10 +15,14 @@ router.post('/login', async (req, res) => {
     const passwordNorm = String(password).trim();
     const user = await User.findOne({ email: emailNorm }).select('+password');
     if (!user) {
+      console.warn(
+        '[auth] Login failed: no user with this email in the connected database (Render: verify MONGODB_URI db name matches local / Compass).',
+      );
       return res.status(401).json({ message: 'Invalid email or password' });
     }
     const match = await user.comparePassword(passwordNorm);
     if (!match) {
+      console.warn('[auth] Login failed: password does not match stored hash for this user.');
       return res.status(401).json({ message: 'Invalid email or password' });
     }
     const token = jwt.sign(
