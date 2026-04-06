@@ -50,6 +50,11 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
+// Root — quick check that the HTTP server is up (independent of MongoDB)
+app.get('/', (req, res) => {
+  res.type('text/plain').send('API is running');
+});
+
 // Serve uploaded profile photos
 app.use('/api/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -116,13 +121,15 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: 'Internal server error' });
 });
 
-// Connect to MongoDB if MONGODB_URI is set (e.g. in .env)
-if (process.env.MONGODB_URI) {
-  connectDB();
-} else {
-  console.log('No MONGODB_URI set – running without database. Add .env with MONGODB_URI to connect.');
+async function start() {
+  await connectDB();
+
+  app.listen(PORT, () => {
+    console.log(`Server listening on http://localhost:${PORT}`);
+  });
 }
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+start().catch((err) => {
+  console.error('Failed to start server:', err instanceof Error ? err.message : err);
+  process.exit(1);
 });
