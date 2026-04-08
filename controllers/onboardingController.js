@@ -124,6 +124,36 @@ async function validateToken(req, res) {
   });
 }
 
+/**
+ * GET /api/onboarding/submissions
+ * Admin/HR: list onboarding submissions with document links.
+ */
+async function listSubmissions(req, res) {
+  if (!dbReady(res)) return;
+  const limitRaw = Number(req.query?.limit || 100);
+  const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(500, Math.trunc(limitRaw))) : 100;
+
+  try {
+    const rows = await OnboardingCandidate.find({})
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean();
+
+    const submissions = rows.map((r) => ({
+      id: String(r._id),
+      name: r.name || '',
+      email: r.email || '',
+      createdAt: r.createdAt,
+      documentSlots: Array.isArray(r.documentSlots) ? r.documentSlots : [],
+      formData: r.formData || {},
+    }));
+    return res.json({ submissions });
+  } catch (err) {
+    console.error('[onboarding] list submissions failed', err instanceof Error ? err.message : err);
+    return res.status(500).json({ message: 'Could not load onboarding submissions' });
+  }
+}
+
 function parseFormDataField(raw) {
   if (raw == null || raw === '') return {};
   if (typeof raw === 'object' && !Array.isArray(raw)) return raw;
@@ -180,6 +210,11 @@ async function submitOnboarding(req, res) {
   }
 
   const files = Array.isArray(req.files) ? req.files : [];
+  if (!files.length) {
+    return res.status(400).json({
+      message: 'No documents were uploaded. Please attach required files before submitting.',
+    });
+  }
 
   const reserved = new Set(['token', 'name', 'email', 'formData']);
   const extra = { ...req.body };
@@ -197,7 +232,7 @@ async function submitOnboarding(req, res) {
   let uploaded;
   try {
     uploaded = await uploadOnboardingPackage({
-      candidateFolderName: name,
+      candidateEmail: email,
       files,
       formPayload,
     });
@@ -212,20 +247,46 @@ async function submitOnboarding(req, res) {
 
   const fileEntries = uploaded.uploaded.filter((u) => u.originalName !== 'onboarding-form-data.json');
   const jsonEntry = uploaded.uploaded.find((u) => u.originalName === 'onboarding-form-data.json');
+  const bySlotId = new Map(fileEntries.map((u) => [u.slotId, u]));
+  const baseSlots = Array.isArray(formData.documentSlots) ? formData.documentSlots : [];
+  const finalDocumentSlots = baseSlots.map((s) => {
+    const id = String(s?.id || '').trim();
+    const hit = bySlotId.get(id);
+    return {
+      id,
+      label: typeof s?.label === 'string' ? s.label : '',
+      uploaded: Boolean(hit),
+      originalName: hit?.originalName || '',
+      driveFileId: hit?.driveFileId || '',
+      fileUrl: hit?.webUrl || '',
+      webUrl: hit?.webUrl || '',
+      contentType: hit?.contentType || '',
+    };
+  });
+  for (const u of fileEntries) {
+    if (!finalDocumentSlots.some((s) => s.id === u.slotId)) {
+      finalDocumentSlots.push({
+        id: u.slotId,
+        label: u.slotId,
+        uploaded: true,
+        originalName: u.originalName,
+        driveFileId: u.driveFileId,
+        fileUrl: u.webUrl,
+        webUrl: u.webUrl,
+        contentType: u.contentType,
+      });
+    }
+  }
 
   let candidate;
   try {
     candidate = await OnboardingCandidate.create({
       name,
       email,
-      files: fileEntries.map((u) => ({
-        originalName: u.originalName,
-        driveFileId: u.driveFileId,
-        webUrl: u.webUrl,
-        contentType: u.contentType,
-      })),
+      documentSlots: finalDocumentSlots,
       formData: {
         ...formData,
+        documentSlots: finalDocumentSlots,
         _onboardingJsonFileId: jsonEntry?.driveFileId || '',
         _onboardingJsonWebUrl: jsonEntry?.webUrl || '',
       },
@@ -256,12 +317,13 @@ async function submitOnboarding(req, res) {
   return res.status(201).json({
     message: 'Onboarding submitted successfully',
     id: candidate._id.toString(),
-    files: candidate.files,
+    documentSlots: candidate.documentSlots,
   });
 }
 
 module.exports = {
   sendInvite,
   validateToken,
+  listSubmissions,
   submitOnboarding,
 };

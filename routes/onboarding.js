@@ -5,6 +5,7 @@ const { runOnboardingUpload } = require('../middleware/onboardingUpload');
 const {
   sendInvite,
   validateToken,
+  listSubmissions,
   submitOnboarding,
 } = require('../controllers/onboardingController');
 
@@ -15,6 +16,9 @@ router.post('/send-invite', verifyToken, adminOrHRManagement, asyncHandler(sendI
 
 /** Public: validate magic link token */
 router.get('/validate-token', asyncHandler(validateToken));
+
+/** Admin/HR: list onboarding submissions */
+router.get('/submissions', verifyToken, adminOrHRManagement, asyncHandler(listSubmissions));
 
 /** Public: submit form + files */
 router.post('/submit', runOnboardingUpload, asyncHandler(submitOnboarding));

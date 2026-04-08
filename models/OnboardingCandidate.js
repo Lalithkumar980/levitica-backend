@@ -1,11 +1,15 @@
 const mongoose = require('mongoose');
 
-const fileEntrySchema = new mongoose.Schema(
+const documentSlotSchema = new mongoose.Schema(
   {
-    originalName: { type: String, required: true },
+    id: { type: String, required: true },
+    label: { type: String, default: '' },
+    uploaded: { type: Boolean, default: false },
+    originalName: { type: String, default: '' },
     /** Google Drive file id */
-    driveFileId: { type: String, required: true },
+    driveFileId: { type: String, default: '' },
     /** Shareable view link (anyone with link after permission set) */
+    fileUrl: { type: String, default: '' },
     webUrl: { type: String, default: '' },
     contentType: { type: String, default: '' },
   },
@@ -17,7 +21,7 @@ const onboardingCandidateSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, lowercase: true, trim: true },
-    files: { type: [fileEntrySchema], default: [] },
+    documentSlots: { type: [documentSlotSchema], default: [] },
     /** Extra fields from the form (JSON-serializable). */
     formData: { type: mongoose.Schema.Types.Mixed, default: {} },
     invitationToken: { type: String, default: null },

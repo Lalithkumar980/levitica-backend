@@ -1,6 +1,6 @@
 /**
  * Onboarding package upload: multiple files + JSON payload into Google Drive under
- * {GOOGLE_DRIVE_ROOT_FOLDER}/onboarding/{candidateFolderName}/.
+ * {GOOGLE_DRIVE_ROOT_FOLDER}/candidate_<email>/.
  */
 
 const {
@@ -13,23 +13,21 @@ const {
 const DEFAULT_ROOT_FOLDER = 'CandidateUploads';
 
 /**
- * @param {{ candidateFolderName: string; files: Array<{ originalname: string; buffer: Buffer; mimetype: string }>; formPayload: object }} opts
- * @returns {Promise<{ uploaded: Array<{ originalName: string; driveFileId: string; webUrl: string; contentType: string }> }>}
+ * @param {{ candidateEmail: string; files: Array<{ originalname: string; buffer: Buffer; mimetype: string }>; formPayload: object }} opts
+ * @returns {Promise<{ uploaded: Array<{ slotId: string; originalName: string; driveFileId: string; webUrl: string; contentType: string }> }>}
  */
-async function uploadOnboardingPackage({ candidateFolderName, files, formPayload }) {
+async function uploadOnboardingPackage({ candidateEmail, files, formPayload }) {
   const drive = await getDriveClient();
   const rootName = (process.env.GOOGLE_DRIVE_ROOT_FOLDER || DEFAULT_ROOT_FOLDER).trim() || DEFAULT_ROOT_FOLDER;
-  const folder = sanitizeSegment(candidateFolderName);
-  const leafFolderId = await ensureFolderPath(drive, [rootName, 'onboarding', folder]);
+  const emailSegment = sanitizeSegment(String(candidateEmail || '').toLowerCase() || 'unknown');
+  const leafFolderId = await ensureFolderPath(drive, [rootName, `candidate_${emailSegment}`]);
 
   const uploaded = [];
 
   for (let i = 0; i < files.length; i++) {
     const f = files[i];
-    let safeName = sanitizeSegment(f.originalname || 'document');
-    if (files.length > 1) {
-      safeName = `${i + 1}-${safeName}`;
-    }
+    const safeName = sanitizeSegment(f.originalname || 'document');
+    const slotId = safeName.includes('-') ? safeName.split('-')[0] : safeName;
     // eslint-disable-next-line no-await-in-loop
     const { fileId, fileUrl } = await uploadBufferToFolder({
       drive,
@@ -39,6 +37,7 @@ async function uploadOnboardingPackage({ candidateFolderName, files, formPayload
       mimeType: f.mimetype || 'application/octet-stream',
     });
     uploaded.push({
+      slotId,
       originalName: f.originalname || safeName,
       driveFileId: fileId,
       webUrl: fileUrl,
@@ -56,6 +55,7 @@ async function uploadOnboardingPackage({ candidateFolderName, files, formPayload
     mimeType: 'application/json',
   });
   uploaded.push({
+    slotId: 'onboarding_json',
     originalName: jsonName,
     driveFileId: jsonMeta.fileId,
     webUrl: jsonMeta.fileUrl,
