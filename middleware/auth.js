@@ -34,7 +34,7 @@ function requireAdmin(req, res, next) {
 }
 
 // --- 2.4 Reusable role middleware (use after authenticate) ---
-// Role values match User model: 'Admin' | 'Sales Manager' | 'Sales Rep'
+// Role values match User model: 'Admin' | 'HR Management' | 'Sales Manager' | 'Finance Management' | 'Sales Rep'
 
 /** 1. Admin only — 403 if not Admin. Use for: delete, /admin/users. */
 function adminOnly(req, res, next) {
@@ -50,6 +50,15 @@ function managerOrAdmin(req, res, next) {
   if (!req.user) return res.status(401).json({ message: 'Authentication required' });
   if (req.user.role !== 'Admin' && req.user.role !== 'Sales Manager') {
     return res.status(403).json({ message: 'Manager or Admin only' });
+  }
+  next();
+}
+
+/** Admin or HR Management — onboarding invite and similar HR-only actions. */
+function adminOrHRManagement(req, res, next) {
+  if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+  if (req.user.role !== 'Admin' && req.user.role !== 'HR Management') {
+    return res.status(403).json({ message: 'Admin or HR access required' });
   }
   next();
 }
@@ -78,6 +87,7 @@ module.exports = {
   requireAdmin,
   adminOnly,
   managerOrAdmin,
+  adminOrHRManagement,
   isOwnerOrElevated,
   JWT_SECRET,
 };

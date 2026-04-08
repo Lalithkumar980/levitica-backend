@@ -4,6 +4,7 @@
   "description": "Levitica MERN backend - Express + MongoDB API",
   "main": "server.js",
   "scripts": {
+    "google:auth": "node scripts/googleDriveGetRefreshToken.js",
     "start": "node server.js",
     "dev": "nodemon server.js"
   },
@@ -14,10 +15,12 @@
     "dotenv": "^16.4.5",
     "express": "^4.21.0",
     "express-async-handler": "^1.2.0",
+    "googleapis": "^144.0.0",
     "json2csv": "^6.0.0-alpha.2",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.8.0",
     "multer": "^2.1.1",
+    "nodemailer": "^6.10.1",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

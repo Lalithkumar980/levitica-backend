@@ -99,7 +99,30 @@ app.get('/api/health/db', (req, res) => {
   });
 });
 
-const { verifyToken } = require('./middleware/auth');
+/** OAuth redirect target for `npm run google:auth` — shows `code` when Google redirects here */
+app.get('/oauth2callback', (req, res) => {
+  const err = typeof req.query.error === 'string' ? req.query.error : '';
+  const code = typeof req.query.code === 'string' ? req.query.code : '';
+  if (err) {
+    return res.status(400).type('html')
+      .send(`<html><body><p>OAuth error: ${err}</p></body></html>`);
+  }
+  if (!code) {
+    return res.type('html').send('<html><body><p>No <code>code</code> in query. Use the URL Google redirected to.</p></body></html>');
+  }
+  const safeCode = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return res.type('html').send(
+    `<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:640px;margin:2rem auto;">
+    <h2>Google OAuth</h2>
+    <p>Copy the <strong>authorization code</strong> below and paste it into the terminal running <code>npm run google:auth</code>:</p>
+    <pre style="background:#f4f4f4;padding:12px;word-break:break-all;">${safeCode}</pre>
+    <p>Or paste the <strong>full address bar URL</strong> into the script instead.</p>
+    </body></html>`,
+  );
+});
+
+const { verifyToken, adminOrHRManagement } = require('./middleware/auth');
+const asyncHandler = require('express-async-handler');
 const { requireFinanceOrAdmin } = require('./middleware/roles');
 
 const authRoutes = require('./routes/auth');
@@ -122,12 +145,35 @@ const paymentsRoutes = require('./routes/payments');
 const financeReportsRoutes = require('./routes/financeReports');
 const hrRoutes = require('./routes/hr');
 const trainingFeesRoutes = require('./routes/trainingFees');
+const onboardingRoutes = require('./routes/onboarding');
+const onboardingController = require('./controllers/onboardingController');
+const uploadController = require('./controllers/uploadController');
+const { runOnboardingUpload } = require('./middleware/onboardingUpload');
+const { runDriveMultipart } = require('./middleware/driveUpload');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/candidates', candidateRoutes);
 app.use('/api/hr', hrRoutes);
 app.use('/api/training-fees', trainingFeesRoutes);
+app.use('/api/onboarding', onboardingRoutes);
+/** Spec paths at server root (same handlers as /api/onboarding/*) */
+app.post(
+  '/send-invite',
+  verifyToken,
+  adminOrHRManagement,
+  asyncHandler(onboardingController.sendInvite),
+);
+app.get('/validate-token', asyncHandler(onboardingController.validateToken));
+app.post(
+  '/submit',
+  runOnboardingUpload,
+  asyncHandler(onboardingController.submitOnboarding),
+);
+
+/** Authenticated: upload file(s) to Google Drive under CandidateUploads (optional subfolder) */
+app.post('/upload', verifyToken, runDriveMultipart, asyncHandler(uploadController.uploadToDrive));
+app.post('/api/upload', verifyToken, runDriveMultipart, asyncHandler(uploadController.uploadToDrive));
 
 // Protected API routes — verifyToken applied at app level
 app.use('/api/v1/leads', verifyToken, leadsRoutes);
