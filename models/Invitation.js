@@ -6,6 +6,11 @@ const invitationSchema = new mongoose.Schema(
     token: { type: String, required: true, unique: true, index: true },
     expiresAt: { type: Date, required: true, index: true },
     used: { type: Boolean, default: false },
+    candidateType: {
+      type: String,
+      enum: ['fresher', 'experienced'],
+      default: 'fresher',
+    },
   },
   { timestamps: true }
 );

@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const mongoose = require('mongoose');
 const Invitation = require('../models/Invitation');
+const Candidate = require('../models/Candidate');
 const OnboardingCandidate = require('../models/OnboardingCandidate');
 const { sendOnboardingInvite } = require('../utils/email');
 const { uploadOnboardingPackage } = require('../services/onboardingDriveUpload');
@@ -29,9 +30,37 @@ function buildInviteUrl(token) {
   return `${base}${sep}token=${encodeURIComponent(token)}`;
 }
 
+/** Normalize onboarding invite candidate type from API body or DB. */
+function normalizeInviteCandidateType(raw) {
+  const s = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+  return s === 'experienced' ? 'experienced' : 'fresher';
+}
+
+/**
+ * Stored invitation.candidateType wins when present in Mongo (fresher | experienced).
+ * When the field is missing (legacy invites), fall back to Candidate.candidateType, then expYears.
+ */
+async function resolveOnboardingCandidateType(email, storedCandidateType) {
+  if (storedCandidateType === 'experienced' || storedCandidateType === 'fresher') {
+    return storedCandidateType;
+  }
+  const em = email && String(email).toLowerCase().trim();
+  if (!em || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) return 'fresher';
+  try {
+    const c = await Candidate.findOne({ email: em }).select('candidateType expYears exp').lean();
+    if (c?.candidateType === 'experienced') return 'experienced';
+    if (c?.candidateType === 'fresher') return 'fresher';
+    const exp = Number(c?.expYears ?? c?.exp);
+    if (Number.isFinite(exp) && exp > 0) return 'experienced';
+  } catch (e) {
+    console.error('[onboarding] resolve candidateType fallback', e instanceof Error ? e.message : e);
+  }
+  return 'fresher';
+}
+
 /**
  * POST /api/onboarding/send-invite
- * Body: { email: string }
+ * Body: { email: string, candidateType?: 'fresher' | 'experienced' }
  */
 async function sendInvite(req, res) {
   if (!dbReady(res)) return;
@@ -41,12 +70,30 @@ async function sendInvite(req, res) {
     return res.status(400).json({ message: 'Valid candidate email is required' });
   }
 
+  const typeField = req.body?.candidateType ?? req.body?.type;
+  const bodyHadType = typeof typeField === 'string' && typeField.trim() !== '';
+  let candidateType = bodyHadType ? normalizeInviteCandidateType(typeField) : 'fresher';
+
+  if (!bodyHadType) {
+    try {
+      const c = await Candidate.findOne({ email }).select('candidateType expYears exp').lean();
+      if (c?.candidateType === 'experienced') candidateType = 'experienced';
+      else if (c?.candidateType === 'fresher') candidateType = 'fresher';
+      else {
+        const exp = Number(c?.expYears ?? c?.exp);
+        if (Number.isFinite(exp) && exp > 0) candidateType = 'experienced';
+      }
+    } catch (lookupErr) {
+      console.error('[onboarding] candidate lookup for invite', lookupErr instanceof Error ? lookupErr.message : lookupErr);
+    }
+  }
+
   const token = crypto.randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + INVITE_TTL_HOURS * 60 * 60 * 1000);
 
   let invitation;
   try {
-    invitation = await Invitation.create({ email, token, expiresAt, used: false });
+    invitation = await Invitation.create({ email, token, expiresAt, used: false, candidateType });
   } catch (err) {
     console.error('[onboarding] failed to save invitation', err instanceof Error ? err.message : err);
     return res.status(500).json({ message: 'Could not create invitation' });
@@ -117,10 +164,19 @@ async function validateToken(req, res) {
     return res.status(410).json({ message: 'This invitation has expired' });
   }
 
+  let candidateType;
+  try {
+    candidateType = await resolveOnboardingCandidateType(doc.email, doc.candidateType);
+  } catch (e) {
+    console.error('[onboarding] validate-token resolve type', e instanceof Error ? e.message : e);
+    candidateType = 'fresher';
+  }
+
   return res.json({
     valid: true,
     email: doc.email,
     expiresAt: doc.expiresAt,
+    candidateType,
   });
 }
 
@@ -220,6 +276,26 @@ async function submitOnboarding(req, res) {
   const extra = { ...req.body };
   for (const k of reserved) delete extra[k];
   const formData = { ...parseFormDataField(req.body?.formData), ...extra };
+
+  let invTypeRow;
+  try {
+    invTypeRow = await Invitation.findOne({ token }).select('candidateType').lean();
+  } catch (e) {
+    console.error('[onboarding] submit lean type lookup', e instanceof Error ? e.message : e);
+  }
+  let invType;
+  try {
+    invType = await resolveOnboardingCandidateType(invitation.email, invTypeRow?.candidateType);
+  } catch (e) {
+    console.error('[onboarding] submit resolve type', e instanceof Error ? e.message : e);
+    invType = 'fresher';
+  }
+  const mode = typeof formData.mode === 'string' ? formData.mode.trim().toLowerCase() : '';
+  if (mode !== invType) {
+    return res.status(400).json({
+      message: 'Form type does not match your invitation. Open the onboarding link HR sent you and do not change the application type.',
+    });
+  }
 
   const formPayload = {
     name,
