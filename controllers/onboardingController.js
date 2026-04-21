@@ -5,6 +5,7 @@ const Candidate = require('../models/Candidate');
 const OnboardingCandidate = require('../models/OnboardingCandidate');
 const { sendOnboardingInvite } = require('../utils/email');
 const { uploadOnboardingPackage } = require('../services/onboardingDriveUpload');
+const { sanitizeOnboardingFormData } = require('../utils/onboardingPayload');
 
 const INVITE_TTL_HOURS = Number(process.env.ONBOARDING_INVITE_TTL_HOURS || 168);
 
@@ -109,7 +110,7 @@ async function sendInvite(req, res) {
     if (allowLinkWithoutEmail) {
       console.warn('[onboarding] email failed — returning invite link anyway (ONBOARDING_RETURN_INVITE_LINK_ON_EMAIL_FAILURE)', mail.error);
       return res.status(201).json({
-        message: 'Invitation created; email was not delivered — share the link manually',
+        message: 'Document verification link created; email was not delivered — share the link manually',
         email,
         expiresAt: invitation.expiresAt,
         inviteUrl,
@@ -123,13 +124,13 @@ async function sendInvite(req, res) {
       console.error('[onboarding] rollback invitation failed', e instanceof Error ? e.message : e);
     }
     return res.status(502).json({
-      message: 'Invitation was not sent — email delivery failed. Configure SMTP in .env or set EMAIL_USE_JSON=true (dev) or ONBOARDING_RETURN_INVITE_LINK_ON_EMAIL_FAILURE=true (dev).',
+      message: 'Document verification was not sent — email delivery failed. Configure SMTP in .env or set EMAIL_USE_JSON=true (dev) or ONBOARDING_RETURN_INVITE_LINK_ON_EMAIL_FAILURE=true (dev).',
       detail: mail.error,
     });
   }
 
   return res.status(201).json({
-    message: 'Invitation sent',
+    message: 'Document verification sent',
     email,
     expiresAt: invitation.expiresAt,
   });
@@ -158,10 +159,10 @@ async function validateToken(req, res) {
     return res.status(404).json({ message: 'Invalid token' });
   }
   if (doc.used) {
-    return res.status(410).json({ message: 'This invitation has already been used' });
+    return res.status(410).json({ message: 'This document verification link has already been used' });
   }
   if (new Date(doc.expiresAt) <= new Date()) {
-    return res.status(410).json({ message: 'This invitation has expired' });
+    return res.status(410).json({ message: 'This document verification link has expired' });
   }
 
   let candidateType;
@@ -200,13 +201,14 @@ async function listSubmissions(req, res) {
       name: r.name || '',
       email: r.email || '',
       createdAt: r.createdAt,
+      applicationMode: r.applicationMode || (r.formData && r.formData.mode) || null,
       documentSlots: Array.isArray(r.documentSlots) ? r.documentSlots : [],
       formData: r.formData || {},
     }));
     return res.json({ submissions });
   } catch (err) {
     console.error('[onboarding] list submissions failed', err instanceof Error ? err.message : err);
-    return res.status(500).json({ message: 'Could not load onboarding submissions' });
+    return res.status(500).json({ message: 'Could not load document verification submissions' });
   }
 }
 
@@ -256,13 +258,13 @@ async function submitOnboarding(req, res) {
     return res.status(404).json({ message: 'Invalid token' });
   }
   if (invitation.used) {
-    return res.status(410).json({ message: 'This invitation has already been used' });
+    return res.status(410).json({ message: 'This document verification link has already been used' });
   }
   if (invitation.expiresAt <= new Date()) {
-    return res.status(410).json({ message: 'This invitation has expired' });
+    return res.status(410).json({ message: 'This document verification link has expired' });
   }
   if (invitation.email.toLowerCase() !== email) {
-    return res.status(400).json({ message: 'Email must match the invited address' });
+    return res.status(400).json({ message: 'Email must match the document verification email address' });
   }
 
   const files = Array.isArray(req.files) ? req.files : [];
@@ -275,7 +277,7 @@ async function submitOnboarding(req, res) {
   const reserved = new Set(['token', 'name', 'email', 'formData']);
   const extra = { ...req.body };
   for (const k of reserved) delete extra[k];
-  const formData = { ...parseFormDataField(req.body?.formData), ...extra };
+  const formDataRaw = { ...parseFormDataField(req.body?.formData), ...extra };
 
   let invTypeRow;
   try {
@@ -290,12 +292,14 @@ async function submitOnboarding(req, res) {
     console.error('[onboarding] submit resolve type', e instanceof Error ? e.message : e);
     invType = 'fresher';
   }
-  const mode = typeof formData.mode === 'string' ? formData.mode.trim().toLowerCase() : '';
+  const mode = typeof formDataRaw.mode === 'string' ? formDataRaw.mode.trim().toLowerCase() : '';
   if (mode !== invType) {
     return res.status(400).json({
-      message: 'Form type does not match your invitation. Open the onboarding link HR sent you and do not change the application type.',
+      message: 'Form type does not match your document verification link. Open the link HR sent you and do not change the application type.',
     });
   }
+
+  const formData = sanitizeOnboardingFormData(formDataRaw);
 
   const formPayload = {
     name,
@@ -359,6 +363,7 @@ async function submitOnboarding(req, res) {
     candidate = await OnboardingCandidate.create({
       name,
       email,
+      applicationMode: formData.mode === 'experienced' ? 'experienced' : 'fresher',
       documentSlots: finalDocumentSlots,
       formData: {
         ...formData,
@@ -391,7 +396,7 @@ async function submitOnboarding(req, res) {
   });
 
   return res.status(201).json({
-    message: 'Onboarding submitted successfully',
+    message: 'Document verification submitted successfully',
     id: candidate._id.toString(),
     documentSlots: candidate.documentSlots,
   });

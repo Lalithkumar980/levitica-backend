@@ -22,6 +22,13 @@ const onboardingCandidateSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, lowercase: true, trim: true },
     documentSlots: { type: [documentSlotSchema], default: [] },
+    /** Denormalized from formData.mode for queries and HR lists. */
+    applicationMode: {
+      type: String,
+      enum: ['fresher', 'experienced'],
+      default: null,
+      index: true,
+    },
     /** Extra fields from the form (JSON-serializable). */
     formData: { type: mongoose.Schema.Types.Mixed, default: {} },
     invitationToken: { type: String, default: null },

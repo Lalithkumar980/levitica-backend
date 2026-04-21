@@ -21,7 +21,7 @@ function createTransport() {
   const pass = process.env.SMTP_PASS;
 
   if (!host) {
-    logEmail('SMTP_HOST not set — invite emails will fail until SMTP is configured');
+    logEmail('SMTP_HOST not set — document verification emails will fail until SMTP is configured');
     return null;
   }
 
@@ -50,10 +50,10 @@ async function sendOnboardingInvite({ to, inviteUrl }) {
   }
 
   const from = process.env.MAIL_FROM || process.env.SMTP_USER || 'noreply@localhost';
-  const subject = process.env.ONBOARDING_INVITE_SUBJECT || 'Complete your onboarding';
+  const subject = process.env.ONBOARDING_INVITE_SUBJECT || 'Complete your document verification';
 
   const text = [
-    'You have been invited to complete onboarding.',
+    'You have been invited to complete document verification.',
     '',
     `Open this link to continue: ${inviteUrl}`,
     '',
@@ -61,8 +61,8 @@ async function sendOnboardingInvite({ to, inviteUrl }) {
   ].join('\n');
 
   const html = `
-    <p>You have been invited to complete onboarding.</p>
-    <p><a href="${inviteUrl}">Open onboarding form</a></p>
+    <p>You have been invited to complete document verification.</p>
+    <p><a href="${inviteUrl}">Open document verification form</a></p>
     <p style="color:#666;font-size:12px;">If the link does not work, copy and paste:<br/>${inviteUrl}</p>
   `;
 
