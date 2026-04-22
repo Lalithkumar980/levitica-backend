@@ -22,6 +22,16 @@ const onboardingCandidateSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, lowercase: true, trim: true },
     documentSlots: { type: [documentSlotSchema], default: [] },
+    verificationStatus: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected', 'clarification_needed'],
+      default: 'pending',
+      index: true,
+    },
+    verificationNotes: { type: String, default: '' },
+    verificationUpdatedAt: { type: Date, default: null },
+    verificationUpdatedByName: { type: String, default: '' },
+    verificationUpdatedByEmail: { type: String, default: '' },
     /** Denormalized from formData.mode for queries and HR lists. */
     applicationMode: {
       type: String,

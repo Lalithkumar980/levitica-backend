@@ -77,7 +77,65 @@ async function sendOnboardingInvite({ to, inviteUrl }) {
   }
 }
 
+/**
+ * @param {{ to: string; candidateName?: string; attachments?: Array<{ filename?: string; originalname?: string; buffer: Buffer; mimetype?: string }> }} opts
+ * @returns {Promise<{ ok: boolean; messageId?: string; error?: string }>}
+ */
+async function sendOfferLetterEmail({ to, candidateName, attachments = [] }) {
+  const transport = getTransport();
+  if (!transport) {
+    return { ok: false, error: 'Email transport not configured (set SMTP_HOST, etc.)' };
+  }
+
+  const from = process.env.MAIL_FROM || process.env.SMTP_USER || 'noreply@localhost';
+  const safeCandidateName = typeof candidateName === 'string' && candidateName.trim() ? candidateName.trim() : 'Candidate';
+  const subject = process.env.OFFER_LETTER_SUBJECT || 'Offer Letter | Levitica Technologies Pvt. Ltd.';
+
+  const text = [
+    `Dear ${safeCandidateName},`,
+    '',
+    'Please find your offer letter attached to this email.',
+    '',
+    'Review the attached documents carefully. If you have any questions, please reply to this email.',
+    '',
+    'Best regards,',
+    'HR Team',
+    'Levitica Technologies Pvt. Ltd.',
+  ].join('\n');
+
+  const html = `
+    <p>Dear ${safeCandidateName},</p>
+    <p>Please find your offer letter attached to this email.</p>
+    <p>Review the attached documents carefully. If you have any questions, please reply to this email.</p>
+    <p>Best regards,<br/>HR Team<br/>Levitica Technologies Pvt. Ltd.</p>
+  `;
+
+  const normalizedAttachments = attachments.map((file, index) => ({
+    filename: file.filename || file.originalname || `offer-letter-${index + 1}.pdf`,
+    content: file.buffer,
+    contentType: file.mimetype || 'application/pdf',
+  }));
+
+  try {
+    const info = await transport.sendMail({
+      from,
+      to,
+      subject,
+      text,
+      html,
+      attachments: normalizedAttachments,
+    });
+    logEmail('offer letter sent', { to, messageId: info.messageId, attachmentCount: normalizedAttachments.length });
+    return { ok: true, messageId: info.messageId };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logEmail('offer letter send failed', { to, error: message });
+    return { ok: false, error: message };
+  }
+}
+
 module.exports = {
   sendOnboardingInvite,
+  sendOfferLetterEmail,
   createTransport,
 };

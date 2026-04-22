@@ -1,4 +1,6 @@
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
 const router = express.Router();
 const User = require('../models/User');
 const { authenticate, requireAdmin } = require('../middleware/auth');
@@ -28,6 +30,16 @@ function toProfileJson(user) {
     ? `/api/uploads/profiles/${user.profilePhoto}`
     : null;
   return obj;
+}
+
+function removeProfilePhotoFile(filename) {
+  if (!filename) return;
+  const filePath = path.join(__dirname, '..', 'uploads', 'profiles', filename);
+  fs.unlink(filePath, (err) => {
+    if (err && err.code !== 'ENOENT') {
+      console.error('Remove profile photo file error:', err);
+    }
+  });
 }
 
 /** GET /api/users/me — current user profile (no password); credentials visible read-only */
@@ -132,12 +144,32 @@ router.post('/me/photo', authenticate, (req, res, next) => {
     if (!req.file || !req.file.filename) {
       return res.status(400).json({ message: 'No photo file received' });
     }
+    const previousPhoto = user.profilePhoto;
     user.profilePhoto = req.file.filename;
     await user.save();
+    if (previousPhoto && previousPhoto !== req.file.filename) {
+      removeProfilePhotoFile(previousPhoto);
+    }
     res.json(toProfileJson(user));
   } catch (err) {
     console.error('Update profile photo error:', err);
     res.status(500).json({ message: 'Failed to update profile photo' });
+  }
+});
+
+/** DELETE /api/users/me/photo — remove profile photo */
+router.delete('/me/photo', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    const previousPhoto = user.profilePhoto;
+    user.profilePhoto = null;
+    await user.save();
+    removeProfilePhotoFile(previousPhoto);
+    res.json(toProfileJson(user));
+  } catch (err) {
+    console.error('Remove profile photo error:', err);
+    res.status(500).json({ message: 'Failed to remove profile photo' });
   }
 });
 

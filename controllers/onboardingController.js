@@ -3,11 +3,12 @@ const mongoose = require('mongoose');
 const Invitation = require('../models/Invitation');
 const Candidate = require('../models/Candidate');
 const OnboardingCandidate = require('../models/OnboardingCandidate');
-const { sendOnboardingInvite } = require('../utils/email');
+const { sendOnboardingInvite, sendOfferLetterEmail } = require('../utils/email');
 const { uploadOnboardingPackage } = require('../services/onboardingDriveUpload');
 const { sanitizeOnboardingFormData } = require('../utils/onboardingPayload');
 
 const INVITE_TTL_HOURS = Number(process.env.ONBOARDING_INVITE_TTL_HOURS || 168);
+const VERIFICATION_STATUSES = new Set(['pending', 'approved', 'rejected', 'clarification_needed']);
 
 function dbReady(res) {
   if (mongoose.connection.readyState !== 1) {
@@ -35,6 +36,18 @@ function buildInviteUrl(token) {
 function normalizeInviteCandidateType(raw) {
   const s = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
   return s === 'experienced' ? 'experienced' : 'fresher';
+}
+
+function normalizeVerificationStatus(raw) {
+  const s = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+  if (s === 'clarification-needed' || s === 'clarification needed') return 'clarification_needed';
+  if (VERIFICATION_STATUSES.has(s)) return s;
+  return 'pending';
+}
+
+function isProvidedVerificationStatus(raw) {
+  const s = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+  return s === 'clarification-needed' || s === 'clarification needed' || VERIFICATION_STATUSES.has(s);
 }
 
 /**
@@ -137,6 +150,75 @@ async function sendInvite(req, res) {
 }
 
 /**
+ * POST /api/onboarding/send-offer-letter
+ * multipart/form-data:
+ *  - email: string
+ *  - candidateName?: string
+ *  - onboardingCandidateId?: string
+ *  - attachments: PDF files[]
+ */
+async function sendOfferLetter(req, res) {
+  if (!dbReady(res)) return;
+
+  const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+  const candidateName = typeof req.body?.candidateName === 'string' ? req.body.candidateName.trim() : '';
+  const onboardingCandidateId =
+    typeof req.body?.onboardingCandidateId === 'string' ? req.body.onboardingCandidateId.trim() : '';
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ message: 'Valid candidate email is required' });
+  }
+
+  if (onboardingCandidateId && !mongoose.Types.ObjectId.isValid(onboardingCandidateId)) {
+    return res.status(400).json({ message: 'Invalid onboarding candidate id' });
+  }
+
+  const attachments = Array.isArray(req.files) ? req.files : [];
+  if (!attachments.length) {
+    return res.status(400).json({ message: 'At least one offer letter PDF is required' });
+  }
+
+  if (onboardingCandidateId) {
+    let candidateRow;
+    try {
+      candidateRow = await OnboardingCandidate.findById(onboardingCandidateId).select('email name verificationStatus').lean();
+    } catch (err) {
+      console.error('[onboarding] offer letter lookup failed', err instanceof Error ? err.message : err);
+      return res.status(500).json({ message: 'Could not validate candidate before sending offer letter' });
+    }
+
+    if (!candidateRow) {
+      return res.status(404).json({ message: 'Onboarding candidate not found' });
+    }
+    if (String(candidateRow.email || '').trim().toLowerCase() !== email) {
+      return res.status(400).json({ message: 'Email does not match the selected candidate' });
+    }
+    if (normalizeVerificationStatus(candidateRow.verificationStatus) !== 'approved') {
+      return res.status(400).json({ message: 'Offer letter can be sent only for approved candidates' });
+    }
+  }
+
+  const mail = await sendOfferLetterEmail({
+    to: email,
+    candidateName,
+    attachments,
+  });
+
+  if (!mail.ok) {
+    return res.status(502).json({
+      message: 'Offer letter email was not sent. Configure SMTP in .env or set EMAIL_USE_JSON=true for development.',
+      detail: mail.error,
+    });
+  }
+
+  return res.status(201).json({
+    message: 'Offer letter sent successfully',
+    email,
+    attachmentCount: attachments.length,
+  });
+}
+
+/**
  * GET /api/onboarding/validate-token?token=
  */
 async function validateToken(req, res) {
@@ -189,9 +271,13 @@ async function listSubmissions(req, res) {
   if (!dbReady(res)) return;
   const limitRaw = Number(req.query?.limit || 100);
   const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(500, Math.trunc(limitRaw))) : 100;
+  const filter = {};
+  if (typeof req.query?.verificationStatus === 'string' && isProvidedVerificationStatus(req.query.verificationStatus)) {
+    filter.verificationStatus = normalizeVerificationStatus(req.query.verificationStatus);
+  }
 
   try {
-    const rows = await OnboardingCandidate.find({})
+    const rows = await OnboardingCandidate.find(filter)
       .sort({ createdAt: -1 })
       .limit(limit)
       .lean();
@@ -202,6 +288,11 @@ async function listSubmissions(req, res) {
       email: r.email || '',
       createdAt: r.createdAt,
       applicationMode: r.applicationMode || (r.formData && r.formData.mode) || null,
+      verificationStatus: normalizeVerificationStatus(r.verificationStatus),
+      verificationNotes: typeof r.verificationNotes === 'string' ? r.verificationNotes : '',
+      verificationUpdatedAt: r.verificationUpdatedAt || null,
+      verificationUpdatedByName: r.verificationUpdatedByName || '',
+      verificationUpdatedByEmail: r.verificationUpdatedByEmail || '',
       documentSlots: Array.isArray(r.documentSlots) ? r.documentSlots : [],
       formData: r.formData || {},
     }));
@@ -402,9 +493,74 @@ async function submitOnboarding(req, res) {
   });
 }
 
+/**
+ * PATCH /api/onboarding/submissions/:id/status
+ * Admin/HR: update document verification status for a submission.
+ */
+async function updateSubmissionVerification(req, res) {
+  if (!dbReady(res)) return;
+
+  const id = typeof req.params?.id === 'string' ? req.params.id.trim() : '';
+  if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({ message: 'Valid submission id is required' });
+  }
+
+  const rawStatus = req.body?.verificationStatus ?? req.body?.status;
+  if (!isProvidedVerificationStatus(rawStatus)) {
+    return res.status(400).json({ message: 'Invalid verification status' });
+  }
+  const status = normalizeVerificationStatus(rawStatus);
+
+  const notes =
+    typeof req.body?.verificationNotes === 'string'
+      ? req.body.verificationNotes.trim().slice(0, 2000)
+      : typeof req.body?.notes === 'string'
+        ? req.body.notes.trim().slice(0, 2000)
+        : '';
+
+  let doc;
+  try {
+    doc = await OnboardingCandidate.findById(id);
+  } catch (err) {
+    console.error('[onboarding] lookup submission for status update failed', err instanceof Error ? err.message : err);
+    return res.status(500).json({ message: 'Could not update verification status' });
+  }
+
+  if (!doc) {
+    return res.status(404).json({ message: 'Submission not found' });
+  }
+
+  doc.verificationStatus = status;
+  doc.verificationNotes = notes;
+  doc.verificationUpdatedAt = new Date();
+  doc.verificationUpdatedByName = req.user?.name || req.user?.fullName || '';
+  doc.verificationUpdatedByEmail = req.user?.email || '';
+
+  try {
+    await doc.save();
+  } catch (err) {
+    console.error('[onboarding] save submission status failed', err instanceof Error ? err.message : err);
+    return res.status(500).json({ message: 'Could not save verification status' });
+  }
+
+  return res.json({
+    message: 'Verification status updated',
+    submission: {
+      id: doc._id.toString(),
+      verificationStatus: doc.verificationStatus,
+      verificationNotes: doc.verificationNotes || '',
+      verificationUpdatedAt: doc.verificationUpdatedAt,
+      verificationUpdatedByName: doc.verificationUpdatedByName || '',
+      verificationUpdatedByEmail: doc.verificationUpdatedByEmail || '',
+    },
+  });
+}
+
 module.exports = {
   sendInvite,
+  sendOfferLetter,
   validateToken,
   listSubmissions,
   submitOnboarding,
+  updateSubmissionVerification,
 };

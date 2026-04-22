@@ -148,7 +148,7 @@ const trainingFeesRoutes = require('./routes/trainingFees');
 const onboardingRoutes = require('./routes/onboarding');
 const onboardingController = require('./controllers/onboardingController');
 const uploadController = require('./controllers/uploadController');
-const { runOnboardingUpload } = require('./middleware/onboardingUpload');
+const { runOnboardingUpload, runOfferLetterUpload } = require('./middleware/onboardingUpload');
 const { runDriveMultipart } = require('./middleware/driveUpload');
 
 app.use('/api/auth', authRoutes);
@@ -163,6 +163,13 @@ app.post(
   verifyToken,
   adminOrHRManagement,
   asyncHandler(onboardingController.sendInvite),
+);
+app.post(
+  '/send-offer-letter',
+  verifyToken,
+  adminOrHRManagement,
+  runOfferLetterUpload,
+  asyncHandler(onboardingController.sendOfferLetter),
 );
 app.get('/validate-token', asyncHandler(onboardingController.validateToken));
 app.post(
