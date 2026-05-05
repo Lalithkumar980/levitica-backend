@@ -1,7 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const router = express.Router();
-const { authenticate } = require('../middleware/auth');
+const { authenticate, adminOnly } = require('../middleware/auth');
 const { resumeUpload } = require('../middleware/upload');
 const Candidate = require('../models/Candidate');
 
@@ -529,8 +529,8 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-/** DELETE /api/candidates/:id — delete single candidate */
-router.delete('/:id', async (req, res) => {
+/** DELETE /api/candidates/:id — delete single candidate (Admin only) */
+router.delete('/:id', adminOnly, async (req, res) => {
   try {
     if (!isValidObjectId(req.params.id)) {
       return res.status(404).json({ message: 'Candidate not found' });
