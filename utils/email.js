@@ -1,15 +1,17 @@
 const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 
 function logEmail(msg, data) {
   console.log(`[onboarding][email] ${msg}`, data != null ? data : '');
 }
 
 /**
- * Build a Nodemailer transport from env. Supports common SMTP or JSON transport for dev.
- * SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, MAIL_FROM
+ * Build a Nodemailer transport from env.
  */
 function createTransport() {
-  const jsonTransport = process.env.EMAIL_USE_JSON === 'true' || process.env.NODE_ENV === 'test';
+  const jsonTransport =
+    process.env.EMAIL_USE_JSON === 'true' || process.env.NODE_ENV === 'test';
+
   if (jsonTransport) {
     return nodemailer.createTransport({ jsonTransport: true });
   }
@@ -21,7 +23,7 @@ function createTransport() {
   const pass = process.env.SMTP_PASS;
 
   if (!host) {
-    logEmail('SMTP_HOST not set — document verification emails will fail until SMTP is configured');
+    logEmail('SMTP_HOST not set — emails will fail');
     return null;
   }
 
@@ -40,19 +42,21 @@ function getTransport() {
 }
 
 /**
- * @param {{ to: string; inviteUrl: string }} opts
- * @returns {Promise<{ ok: boolean; messageId?: string; error?: string }>}
+ * Resend setup
  */
-const { Resend } = require('resend');
-
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+/**
+ * Send onboarding invite (Resend)
+ */
 async function sendOnboardingInvite({ to, inviteUrl }) {
   try {
     const response = await resend.emails.send({
-      from: 'onboarding@resend.dev', // ✅ test sender
+      from: process.env.MAIL_FROM || 'onboarding@resend.dev',
       to,
-      subject: 'Complete your document verification',
+      subject:
+        process.env.ONBOARDING_INVITE_SUBJECT ||
+        'Complete your document verification',
       html: `
         <p>You have been invited to complete document verification.</p>
         <p><a href="${inviteUrl}">Open document verification form</a></p>
@@ -62,9 +66,8 @@ async function sendOnboardingInvite({ to, inviteUrl }) {
       `,
     });
 
-    logEmail('sent via resend', { to, id: response.id });
+    logEmail('invite sent via resend', { to, id: response.id });
     return { ok: true, messageId: response.id };
-
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     logEmail('resend failed', { to, error: message });
@@ -72,22 +75,33 @@ async function sendOnboardingInvite({ to, inviteUrl }) {
   }
 }
 
- 
-
-
 /**
- * @param {{ to: string; candidateName?: string; attachments?: Array<{ filename?: string; originalname?: string; buffer: Buffer; mimetype?: string }> }} opts
- * @returns {Promise<{ ok: boolean; messageId?: string; error?: string }>}
+ * Send offer letter (SMTP via Nodemailer)
  */
-async function sendOfferLetterEmail({ to, candidateName, attachments = [] }) {
+async function sendOfferLetterEmail({
+  to,
+  candidateName,
+  attachments = [],
+}) {
   const transport = getTransport();
   if (!transport) {
-    return { ok: false, error: 'Email transport not configured (set SMTP_HOST, etc.)' };
+    return {
+      ok: false,
+      error: 'Email transport not configured (set SMTP_HOST, etc.)',
+    };
   }
 
-  const from = process.env.MAIL_FROM || process.env.SMTP_USER || 'noreply@localhost';
-  const safeCandidateName = typeof candidateName === 'string' && candidateName.trim() ? candidateName.trim() : 'Candidate';
-  const subject = process.env.OFFER_LETTER_SUBJECT || 'Offer Letter | Levitica Technologies Pvt. Ltd.';
+  const from =
+    process.env.MAIL_FROM || process.env.SMTP_USER || 'noreply@localhost';
+
+  const safeCandidateName =
+    typeof candidateName === 'string' && candidateName.trim()
+      ? candidateName.trim()
+      : 'Candidate';
+
+  const subject =
+    process.env.OFFER_LETTER_SUBJECT ||
+    'Offer Letter | Levitica Technologies Pvt. Ltd.';
 
   const text = [
     `Dear ${safeCandidateName},`,
@@ -109,7 +123,10 @@ async function sendOfferLetterEmail({ to, candidateName, attachments = [] }) {
   `;
 
   const normalizedAttachments = attachments.map((file, index) => ({
-    filename: file.filename || file.originalname || `offer-letter-${index + 1}.pdf`,
+    filename:
+      file.filename ||
+      file.originalname ||
+      `offer-letter-${index + 1}.pdf`,
     content: file.buffer,
     contentType: file.mimetype || 'application/pdf',
   }));
@@ -123,7 +140,13 @@ async function sendOfferLetterEmail({ to, candidateName, attachments = [] }) {
       html,
       attachments: normalizedAttachments,
     });
-    logEmail('offer letter sent', { to, messageId: info.messageId, attachmentCount: normalizedAttachments.length });
+
+    logEmail('offer letter sent', {
+      to,
+      messageId: info.messageId,
+      attachmentCount: normalizedAttachments.length,
+    });
+
     return { ok: true, messageId: info.messageId };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
