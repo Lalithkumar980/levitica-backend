@@ -72,32 +72,7 @@ async function sendOnboardingInvite({ to, inviteUrl }) {
   }
 }
 
-  const from = process.env.MAIL_FROM || process.env.SMTP_USER || 'noreply@localhost';
-  const subject = process.env.ONBOARDING_INVITE_SUBJECT || 'Complete your document verification';
-
-  const text = [
-    'You have been invited to complete document verification.',
-    '',
-    `Open this link to continue: ${inviteUrl}`,
-    '',
-    'If you did not expect this email, you can ignore it.',
-  ].join('\n');
-
-  const html = `
-    <p>You have been invited to complete document verification.</p>
-    <p><a href="${inviteUrl}">Open document verification form</a></p>
-    <p style="color:#666;font-size:12px;">If the link does not work, copy and paste:<br/>${inviteUrl}</p>
-  `;
-
-  try {
-    const info = await transport.sendMail({ from, to, subject, text, html });
-    logEmail('sent', { to, messageId: info.messageId });
-    return { ok: true, messageId: info.messageId };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    logEmail('send failed', { to, error: message });
-    return { ok: false, error: message };
-  }
+ 
 
 
 /**
