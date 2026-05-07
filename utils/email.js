@@ -43,11 +43,34 @@ function getTransport() {
  * @param {{ to: string; inviteUrl: string }} opts
  * @returns {Promise<{ ok: boolean; messageId?: string; error?: string }>}
  */
+const { Resend } = require('resend');
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+
 async function sendOnboardingInvite({ to, inviteUrl }) {
-  const transport = getTransport();
-  if (!transport) {
-    return { ok: false, error: 'Email transport not configured (set SMTP_HOST, etc.)' };
+  try {
+    const response = await resend.emails.send({
+      from: 'onboarding@resend.dev', // ✅ test sender
+      to,
+      subject: 'Complete your document verification',
+      html: `
+        <p>You have been invited to complete document verification.</p>
+        <p><a href="${inviteUrl}">Open document verification form</a></p>
+        <p style="color:#666;font-size:12px;">
+          If the link does not work, copy and paste:<br/>${inviteUrl}
+        </p>
+      `,
+    });
+
+    logEmail('sent via resend', { to, id: response.id });
+    return { ok: true, messageId: response.id };
+
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logEmail('resend failed', { to, error: message });
+    return { ok: false, error: message };
   }
+}
 
   const from = process.env.MAIL_FROM || process.env.SMTP_USER || 'noreply@localhost';
   const subject = process.env.ONBOARDING_INVITE_SUBJECT || 'Complete your document verification';
