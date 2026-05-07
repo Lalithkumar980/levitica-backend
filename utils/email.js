@@ -98,7 +98,7 @@ async function sendOnboardingInvite({ to, inviteUrl }) {
     logEmail('send failed', { to, error: message });
     return { ok: false, error: message };
   }
-}
+
 
 /**
  * @param {{ to: string; candidateName?: string; attachments?: Array<{ filename?: string; originalname?: string; buffer: Buffer; mimetype?: string }> }} opts
