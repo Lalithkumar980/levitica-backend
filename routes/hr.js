@@ -1,6 +1,11 @@
 const express = require('express');
 const router = express.Router();
+const { authenticate } = require('../middleware/auth');
 const Candidate = require('../models/Candidate');
+const HRActivity = require('../models/HRActivity');
+
+router.use(authenticate);
+
 
 function formatDate(d) {
   try {
@@ -19,68 +24,70 @@ function safeStr(v) {
 
 /**
  * GET /api/hr/recent-activity
- * Returns recent HR activity derived from Candidates.
- *
- * Response shape:
- * { activity: [{ type, title, subtitle, icon }] }
+ * Returns recent HR activity including candidate intakes, stage changes, and feedback.
  */
 router.get('/recent-activity', async (req, res) => {
   try {
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 10, 1), 50);
 
+    // Fetch recorded activities
+    const logs = await HRActivity.find().sort({ createdAt: -1 }).limit(limit).lean();
+
+    // If we have recorded activities, use them. 
+    // We also fetch some candidates to ensure the list isn't empty on day 1.
     const candidates = await Candidate.find()
       .select('name position dept offer onboarding createdAt joiningDate')
+      .sort({ createdAt: -1 })
+      .limit(limit)
       .lean();
 
-    // Map and sort by activity date (most recent first)
-    let activity = candidates
-      .map((c) => {
-        const name = safeStr(c.name) || 'Candidate';
-        const position = safeStr(c.position);
-        const dept = safeStr(c.dept);
-        const created = formatDate(c.createdAt);
-        const joiningDate = formatDate(c.joiningDate);
+    const legacyActivity = candidates.map((c) => {
+      const name = safeStr(c.name) || 'Candidate';
+      const created = formatDate(c.createdAt);
+      const offer = safeStr(c.offer);
+      const onboarding = safeStr(c.onboarding);
 
-        const offer = safeStr(c.offer);
-        const onboarding = safeStr(c.onboarding);
+      let type = 'candidate';
+      let title = `Candidate added: ${name}`;
+      let icon = 'person';
+      let sortDate = c.createdAt;
 
-        let type = 'candidate';
-        let title = name;
-        let icon = 'person';
-        let activityDate = created;
-        let sortDate = c.createdAt; // Default sort date
+      if (onboarding === 'Completed') {
+        type = 'joined';
+        title = `${name} joined`;
+        sortDate = c.joiningDate ? new Date(c.joiningDate) : c.createdAt;
+      } else if (offer === 'Done') {
+        type = 'offer';
+        title = `Offer done for ${name}`;
+      }
 
-        if (onboarding === 'Completed') {
-          type = 'joined';
-          title = `${name} joined`;
-          icon = 'person';
-          activityDate = joiningDate || created;
-          // Sort by joiningDate if available, otherwise createdAt
-          sortDate = c.joiningDate ? new Date(c.joiningDate) : c.createdAt;
-        } else if (offer === 'Done') {
-          type = 'offer';
-          title = `Offer done for ${name}`;
-          icon = 'offer';
-          sortDate = c.createdAt;
-        }
+      const rolePart = safeStr(c.position) && safeStr(c.position) !== '—' ? c.position : '';
+      const subtitle = [rolePart, formatDate(sortDate)].filter(Boolean).join(' · ');
 
-        const rolePart = position && position !== '—' ? position : '';
-        const deptPart = dept && dept !== '—' ? dept : '';
-        const meta = [rolePart, deptPart].filter(Boolean).join(' · ');
-        const subtitle = [meta, activityDate].filter(Boolean).join(' · ') || activityDate || '';
+      return { type, title, subtitle, icon, sortDate };
+    });
 
-        return { type, title, subtitle, icon, sortDate };
-      })
-      .sort((a, b) => new Date(b.sortDate) - new Date(a.sortDate)) // Sort by date descending
-      .slice(0, limit) // Apply limit after sorting
-      .map(({ sortDate, ...item }) => item); // Remove sortDate from final response
+    const modernActivity = logs.map(l => ({
+      type: l.type,
+      title: l.title,
+      subtitle: [l.subtitle, formatDate(l.createdAt)].filter(Boolean).join(' · '),
+      icon: l.icon || 'person',
+      sortDate: l.createdAt
+    }));
 
-    res.json({ activity });
+    // Merge and sort
+    const combined = [...modernActivity, ...legacyActivity]
+      .sort((a, b) => new Date(b.sortDate) - new Date(a.sortDate))
+      .slice(0, limit)
+      .map(({ sortDate, ...item }) => item);
+
+    res.json({ activity: combined });
   } catch (err) {
     console.error('HR recent activity error:', err);
     res.status(500).json({ message: 'Failed to fetch recent activity' });
   }
 });
+
 
 module.exports = router;
 

@@ -4,6 +4,9 @@ const router = express.Router();
 const { authenticate, adminOnly } = require('../middleware/auth');
 const { resumeUpload } = require('../middleware/upload');
 const Candidate = require('../models/Candidate');
+const HRActivity = require('../models/HRActivity');
+const { logHRActivity } = require('../utils/hrLogger');
+
 
 function isValidObjectId(id) {
   return mongoose.Types.ObjectId.isValid(id) && String(new mongoose.Types.ObjectId(id)) === String(id);
@@ -165,7 +168,18 @@ router.post('/intake', (req, res, next) => {
       recruiter: { name: hrName, initials: initialsFromName(hrName) },
     });
 
+    await logHRActivity({
+      candidateId: doc._id,
+      candidateName: doc.name,
+      type: 'intake',
+      title: `New candidate added: ${doc.name}`,
+      subtitle: `${doc.position || ''} · ${doc.source || ''}`,
+      icon: 'person',
+      performedBy: req.user?.name || hrName,
+    });
+
     res.status(201).json(doc.toJSON());
+
   } catch (err) {
     console.error('Candidate intake error:', err);
     if (err.code === 11000) {
@@ -347,7 +361,19 @@ router.patch('/:id/stage', async (req, res) => {
     doc.pipelineStage = stage;
     syncOfferWithStage(doc);
     await doc.save();
+
+    await logHRActivity({
+      candidateId: doc._id,
+      candidateName: doc.name,
+      type: 'stage_change',
+      title: `${doc.name} moved to ${stage}`,
+      subtitle: `Moved by ${req.user?.name || 'HR'}`,
+      icon: stage === 'Rejected' ? 'person' : 'person', // Could use different icons
+      performedBy: req.user?.name,
+    });
+
     res.json(doc.toJSON());
+
   } catch (err) {
     console.error('Candidate stage update error:', err);
     res.status(500).json({ message: err.message || 'Failed to update stage' });
@@ -396,13 +422,54 @@ router.post('/:id/feedback', async (req, res) => {
     }
     await doc.save();
 
+    await logHRActivity({
+      candidateId: doc._id,
+      candidateName: doc.name,
+      type: 'feedback',
+      title: `Feedback added for ${doc.name}`,
+      subtitle: `${round} · Rating: ${rating}/5 · ${recommendation}`,
+      icon: recommendation === 'Reject' ? 'person' : 'person',
+      performedBy: req.user?.name || interviewer,
+    });
+
     const plain = doc.toObject();
     res.json(leanToClient(plain));
+
   } catch (err) {
     console.error('Candidate feedback error:', err);
     res.status(500).json({ message: err.message || 'Failed to save feedback' });
   }
 });
+
+/** POST /api/candidates/:id/conversation — add a message to the conversation history */
+router.post('/:id/conversation', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isValidObjectId(id)) {
+      return res.status(404).json({ message: 'Candidate not found' });
+    }
+    const { message } = req.body || {};
+
+    if (!message || typeof message !== 'string' || !message.trim()) {
+      return res.status(400).json({ message: 'Message content is required.' });
+    }
+
+    const doc = await Candidate.findById(id);
+    if (!doc) return res.status(404).json({ message: 'Candidate not found' });
+
+    doc.conversation.push({
+      sender: req.user?.name || 'HR',
+      message: message.trim(),
+    });
+    
+    await doc.save();
+    res.json(leanToClient(doc.toObject()));
+  } catch (err) {
+    console.error('Candidate conversation error:', err);
+    res.status(500).json({ message: err.message || 'Failed to save message' });
+  }
+});
+
 
 /** GET /api/candidates/:id — single candidate */
 router.get('/:id', async (req, res) => {

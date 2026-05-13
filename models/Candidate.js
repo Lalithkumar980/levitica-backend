@@ -32,7 +32,16 @@ const feedbackEntrySchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+const conversationEntrySchema = new mongoose.Schema(
+  {
+    sender: { type: String, required: true }, // Name of the user/role
+    message: { type: String, required: true, trim: true },
+  },
+  { timestamps: true }
+);
+
 const candidateSchema = new mongoose.Schema(
+
   {
     name: { type: String, required: true, trim: true },
     note: { type: String, default: null },
@@ -76,7 +85,10 @@ const candidateSchema = new mongoose.Schema(
 
     /** Pipeline interview feedback (modal → POST /api/candidates/:id/feedback) */
     feedback: { type: [feedbackEntrySchema], default: [] },
+    /** HR pipeline conversation/notes history */
+    conversation: { type: [conversationEntrySchema], default: [] },
   },
+
   { timestamps: true }
 );
 

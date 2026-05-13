@@ -80,8 +80,14 @@ async function create(req, res) {
       outcome: body.outcome, company: body.company, recording: body.recording, rep: body.rep, dealId: body.dealId,
       contactId: body.contactId, followupDate: body.followupDate, followupType: body.followupType,
     }, REP_FIELD);
+
+    if (req.file) {
+      payload.recording = `/api/uploads/calls/${req.file.filename}`;
+    }
+
     if (!payload.rep) payload.rep = req.user._id;
     const doc = await Activity.create(payload);
+
     const populated = await Activity.findById(doc._id)
       .populate('rep', 'name')
       .populate('dealId', 'title company stage')
@@ -118,7 +124,13 @@ async function update(req, res) {
     const body = req.body || {};
     const allowed = ['type', 'subject', 'notes', 'date', 'duration', 'outcome', 'company', 'recording', 'rep', 'dealId', 'contactId', 'followupDate', 'followupType'];
     allowed.forEach((key) => { if (body[key] !== undefined) doc[key] = body[key]; });
+    
+    if (req.file) {
+      doc.recording = `/api/uploads/calls/${req.file.filename}`;
+    }
+
     if (isRep(req)) doc.rep = req.user._id;
+
     await doc.save();
     const populated = await Activity.findById(doc._id)
       .populate('rep', 'name')

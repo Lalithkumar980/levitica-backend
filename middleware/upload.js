@@ -70,9 +70,34 @@ const resumeUpload = multer({
   },
 }).single('resume');
 
+/** Call recordings: disk storage under uploads/calls, max 20MB, Audio files. */
+const callsDir = path.join(__dirname, '..', 'uploads', 'calls');
+if (!fs.existsSync(callsDir)) {
+  fs.mkdirSync(callsDir, { recursive: true });
+}
+const callRecordingStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, callsDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname || '') || '.mp3';
+    const safe = `call-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    cb(null, `${safe}${ext}`);
+  },
+});
+const callRecordingUpload = multer({
+  storage: callRecordingStorage,
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
+  fileFilter: (req, file, cb) => {
+    const ok = /^audio\//i.test(file.mimetype) || /\.(mp3|wav|ogg|m4a)$/i.test(file.originalname || '');
+    if (ok) cb(null, true);
+    else cb(new Error('Only audio files (MP3, WAV, OGG, M4A) are allowed (max 20MB)'), false);
+  },
+}).single('recording');
+
 module.exports = {
   csvUpload,
   uploadLeadsCsv,
   profilePhotoUpload,
   resumeUpload,
+  callRecordingUpload,
 };
+

@@ -6,6 +6,8 @@ const OnboardingCandidate = require('../models/OnboardingCandidate');
 const { sendOnboardingInvite, sendOfferLetterEmail } = require('../utils/email');
 const { uploadOnboardingPackage } = require('../services/onboardingDriveUpload');
 const { sanitizeOnboardingFormData } = require('../utils/onboardingPayload');
+const { logHRActivity } = require('../utils/hrLogger');
+
 
 const INVITE_TTL_HOURS = Number(process.env.ONBOARDING_INVITE_TTL_HOURS || 168);
 const VERIFICATION_STATUSES = new Set(['pending', 'approved', 'rejected', 'clarification_needed']);
@@ -88,18 +90,20 @@ async function sendInvite(req, res) {
   const bodyHadType = typeof typeField === 'string' && typeField.trim() !== '';
   let candidateType = bodyHadType ? normalizeInviteCandidateType(typeField) : 'fresher';
 
-  if (!bodyHadType) {
-    try {
-      const c = await Candidate.findOne({ email }).select('candidateType expYears exp').lean();
+  let candidateName = 'Candidate';
+  try {
+    const c = await Candidate.findOne({ email }).select('name candidateType expYears exp').lean();
+    if (c?.name) candidateName = c.name;
+    if (!bodyHadType) {
       if (c?.candidateType === 'experienced') candidateType = 'experienced';
       else if (c?.candidateType === 'fresher') candidateType = 'fresher';
       else {
         const exp = Number(c?.expYears ?? c?.exp);
         if (Number.isFinite(exp) && exp > 0) candidateType = 'experienced';
       }
-    } catch (lookupErr) {
-      console.error('[onboarding] candidate lookup for invite', lookupErr instanceof Error ? lookupErr.message : lookupErr);
     }
+  } catch (lookupErr) {
+    console.error('[onboarding] candidate lookup for invite', lookupErr instanceof Error ? lookupErr.message : lookupErr);
   }
 
   const token = crypto.randomBytes(32).toString('hex');
@@ -120,7 +124,18 @@ async function sendInvite(req, res) {
     String(process.env.ONBOARDING_RETURN_INVITE_LINK_ON_EMAIL_FAILURE || '').toLowerCase() === 'true';
 
   if (!mail.ok) {
+    // Log failure
+    await logHRActivity({
+      candidateName,
+      type: 'onboarding',
+      title: `Failed to send verification to ${candidateName}`,
+      subtitle: `Error: ${mail.error || 'Unknown error'}`,
+      icon: 'person', // Could use a specific 'fail' icon if added to UI
+      performedBy: req.user?.name || 'HR',
+    });
+
     if (allowLinkWithoutEmail) {
+
       console.warn('[onboarding] email failed — returning invite link anyway (ONBOARDING_RETURN_INVITE_LINK_ON_EMAIL_FAILURE)', mail.error);
       return res.status(201).json({
         message: 'Document verification link created; email was not delivered — share the link manually',
@@ -137,16 +152,26 @@ async function sendInvite(req, res) {
       console.error('[onboarding] rollback invitation failed', e instanceof Error ? e.message : e);
     }
     return res.status(502).json({
-      message: 'Document verification was not sent — email delivery failed. Configure SMTP in .env or set EMAIL_USE_JSON=true (dev) or ONBOARDING_RETURN_INVITE_LINK_ON_EMAIL_FAILURE=true (dev).',
+      message: 'Document verification email failed to send via Resend. Ensure your domain is verified in Resend dashboard or check .env configuration.',
       detail: mail.error,
     });
   }
+
+  // Log successful invite
+  await logHRActivity({
+    candidateName,
+    type: 'onboarding',
+    title: `Document verification sent to ${candidateName}`,
+    subtitle: `Email: ${email}`,
+    performedBy: req.user?.name || 'HR',
+  });
 
   return res.status(201).json({
     message: 'Document verification sent',
     email,
     expiresAt: invitation.expiresAt,
   });
+
 }
 
 /**
@@ -205,17 +230,37 @@ async function sendOfferLetter(req, res) {
   });
 
   if (!mail.ok) {
+    // Log failure
+    await logHRActivity({
+      candidateName: candidateName || email,
+      type: 'joining',
+      title: `Failed to send offer letter to ${candidateName || email}`,
+      subtitle: `Error: ${mail.error || 'Unknown error'}`,
+      performedBy: req.user?.name || 'HR',
+    });
+
     return res.status(502).json({
+
       message: 'Offer letter email was not sent. Configure SMTP in .env or set EMAIL_USE_JSON=true for development.',
       detail: mail.error,
     });
   }
+
+  // Log successful offer letter
+  await logHRActivity({
+    candidateName: candidateName || email,
+    type: 'joining',
+    title: `Offer letter sent to ${candidateName || email}`,
+    subtitle: `Attachments: ${attachments.length}`,
+    performedBy: req.user?.name || 'HR',
+  });
 
   return res.status(201).json({
     message: 'Offer letter sent successfully',
     email,
     attachmentCount: attachments.length,
   });
+
 }
 
 /**

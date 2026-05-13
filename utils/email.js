@@ -50,8 +50,9 @@ const resend = new Resend(process.env.RESEND_API_KEY);
  * Send onboarding invite (Resend)
  */
 async function sendOnboardingInvite({ to, inviteUrl }) {
+  console.log("Function called",{to});
   try {
-    const response = await resend.emails.send({
+    const { data, error } = await resend.emails.send({
       from: process.env.MAIL_FROM || 'onboarding@resend.dev',
       to,
       subject:
@@ -66,11 +67,19 @@ async function sendOnboardingInvite({ to, inviteUrl }) {
       `,
     });
 
-    logEmail('invite sent via resend', { to, id: response.id });
-    return { ok: true, messageId: response.id };
+    if (error) {
+      console.error("❌ RESEND ERROR:", error);
+      logEmail('resend failed', { to, error: error.message || error });
+      return { ok: false, error: error.message || 'Resend failed to send email' };
+    }
+
+    console.log("RESEND SUCCESS:", data);
+    logEmail('invite sent via resend', { to, id: data.id });
+    return { ok: true, messageId: data.id };
   } catch (err) {
+    console.error("❌ CRITICAL RESEND ERROR:", err);
     const message = err instanceof Error ? err.message : String(err);
-    logEmail('resend failed', { to, error: message });
+    logEmail('resend exception', { to, error: message });
     return { ok: false, error: message };
   }
 }
