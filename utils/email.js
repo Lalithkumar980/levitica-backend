@@ -50,7 +50,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
  * Send onboarding invite (Resend)
  */
 async function sendOnboardingInvite({ to, inviteUrl }) {
-  console.log("Function called",{to});
+  console.log("Function called", { to });
   try {
     const { data, error } = await resend.emails.send({
       from: process.env.MAIL_FROM || 'onboarding@resend.dev',
@@ -101,7 +101,7 @@ async function sendOfferLetterEmail({
   }
 
   const from =
-    process.env.MAIL_FROM || process.env.SMTP_USER || 'noreply@localhost';
+    process.env.MAIL_FROMS || process.env.SMTP_USER || 'noreply@localhost';
 
   const safeCandidateName =
     typeof candidateName === 'string' && candidateName.trim()
