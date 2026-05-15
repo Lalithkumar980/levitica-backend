@@ -1,44 +1,7 @@
-const nodemailer = require('nodemailer');
 const { Resend } = require('resend');
 
 function logEmail(msg, data) {
   console.log(`[onboarding][email] ${msg}`, data != null ? data : '');
-}
-
-/**
- * Build a Nodemailer transport from env.
- */
-function createTransport() {
-  const jsonTransport =
-    process.env.EMAIL_USE_JSON === 'true' || process.env.NODE_ENV === 'test';
-
-  if (jsonTransport) {
-    return nodemailer.createTransport({ jsonTransport: true });
-  }
-
-  const host = process.env.SMTP_HOST;
-  const port = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587;
-  const secure = process.env.SMTP_SECURE === 'true' || port === 465;
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-
-  if (!host) {
-    logEmail('SMTP_HOST not set — emails will fail');
-    return null;
-  }
-
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure,
-    auth: user && pass ? { user, pass } : undefined,
-  });
-}
-
-let cachedTransport = null;
-function getTransport() {
-  if (!cachedTransport) cachedTransport = createTransport();
-  return cachedTransport;
 }
 
 /**
@@ -85,23 +48,14 @@ async function sendOnboardingInvite({ to, inviteUrl }) {
 }
 
 /**
- * Send offer letter (SMTP via Nodemailer)
+ * Send offer letter (Resend)
  */
 async function sendOfferLetterEmail({
   to,
   candidateName,
   attachments = [],
 }) {
-  const transport = getTransport();
-  if (!transport) {
-    return {
-      ok: false,
-      error: 'Email transport not configured (set SMTP_HOST, etc.)',
-    };
-  }
-
-  const from =
-    process.env.MAIL_FROMS || process.env.SMTP_USER || 'noreply@localhost';
+  const from = process.env.MAIL_FROM || 'info@leviticatechnologies.com';
 
   const safeCandidateName =
     typeof candidateName === 'string' && candidateName.trim()
@@ -136,12 +90,12 @@ async function sendOfferLetterEmail({
       file.filename ||
       file.originalname ||
       `offer-letter-${index + 1}.pdf`,
-    content: file.buffer,
-    contentType: file.mimetype || 'application/pdf',
+    content: file.buffer.toString('base64'),
+    type: file.mimetype || 'application/pdf',
   }));
 
   try {
-    const info = await transport.sendMail({
+    const { data, error } = await resend.emails.send({
       from,
       to,
       subject,
@@ -150,16 +104,19 @@ async function sendOfferLetterEmail({
       attachments: normalizedAttachments,
     });
 
-    logEmail('offer letter sent', {
-      to,
-      messageId: info.messageId,
-      attachmentCount: normalizedAttachments.length,
-    });
+    if (error) {
+      console.error("❌ RESEND ERROR:", error);
+      logEmail('resend failed', { to, error: error.message || error });
+      return { ok: false, error: error.message || 'Resend failed to send email' };
+    }
 
-    return { ok: true, messageId: info.messageId };
+    console.log("RESEND SUCCESS:", data);
+    logEmail('offer letter sent via resend', { to, id: data.id });
+    return { ok: true, messageId: data.id };
   } catch (err) {
+    console.error("❌ CRITICAL RESEND ERROR:", err);
     const message = err instanceof Error ? err.message : String(err);
-    logEmail('offer letter send failed', { to, error: message });
+    logEmail('resend exception', { to, error: message });
     return { ok: false, error: message };
   }
 }
@@ -167,5 +124,4 @@ async function sendOfferLetterEmail({
 module.exports = {
   sendOnboardingInvite,
   sendOfferLetterEmail,
-  createTransport,
 };
