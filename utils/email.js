@@ -53,7 +53,7 @@ async function sendOnboardingInvite({ to, inviteUrl }) {
   console.log("Function called", { to });
   try {
     const { data, error } = await resend.emails.send({
-      from: process.env.MAIL_FROM || 'onboarding@resend.dev',
+      from: process.env.MAIL_FROM || 'info@leviticatechnologies.com',
       to,
       subject:
         process.env.ONBOARDING_INVITE_SUBJECT ||
