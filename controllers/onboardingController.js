@@ -24,7 +24,7 @@ function inviteBaseUrl() {
   return (
     process.env.ONBOARDING_FORM_BASE_URL ||
     process.env.FRONTEND_URL ||
-    'http://localhost:3000/onboarding'
+    'https://levitica-data-management.vercel.app/onboarding'
   ).replace(/\/$/, '');
 }
 
