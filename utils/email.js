@@ -53,6 +53,7 @@ async function sendOnboardingInvite({ to, inviteUrl }) {
 async function sendOfferLetterEmail({
   to,
   candidateName,
+  joiningDate,
   attachments = [],
 }) {
   const from = process.env.MAIL_FROM || 'info@leviticatechnologies.com';
@@ -69,20 +70,40 @@ async function sendOfferLetterEmail({
   const text = [
     `Dear ${safeCandidateName},`,
     '',
-    'Please find your offer letter attached to this email.',
+    'We are pleased to offer you the position of "Associate Software Engineer" at Levitica Technologies Pvt. Ltd. Please find your offer letter attached to this email.',
     '',
-    'Review the attached documents carefully. If you have any questions, please reply to this email.',
+    `Your skills and background align well with our expectations, and we are confident that you will be a valuable addition to our team. As mentioned in the offer, your joining date is ${joiningDate || '(Date)'}.`,
     '',
-    'Best regards,',
-    'HR Team',
+    'We kindly request you to carefully review the attached offer letter. If you accept the terms and conditions outlined, please sign the document and send a scanned copy to us at your earliest convenience to confirm your acceptance.',
+    '',
+    'On-boarding Location:',
+    'Your onboarding will take place at the address below. Please report to the location as instructed, where our team will assist you with the process:',
     'Levitica Technologies Pvt. Ltd.',
+    '1-90/2/46/1, Sriram Plaza, 2nd Floor',
+    'Image Hospital Road, Vittal Rao Nagar',
+    'Madhapur, Hyderabad, Telangana – 500081.',
+    '',
+    'Note: We also request you to carry your original certificates including your 10th and Intermediate mark sheets for verification purposes, along with one set of Xerox copies of all your certificates. Additionally, please bring one passport-size photograph in hard copy and a soft copy of the same.',
+    '',
+    'Should you have any questions or need any clarification, please feel free to reach out. We will be happy to assist you.',
+    '',
+    'We look forward to welcoming you to the Levitica family and beginning an exciting journey of growth and innovation together.',
   ].join('\n');
 
   const html = `
     <p>Dear ${safeCandidateName},</p>
-    <p>Please find your offer letter attached to this email.</p>
-    <p>Review the attached documents carefully. If you have any questions, please reply to this email.</p>
-    <p>Best regards,<br/>HR Team<br/>Levitica Technologies Pvt. Ltd.</p>
+    <p>We are pleased to offer you the position of "Associate Software Engineer" at Levitica Technologies Pvt. Ltd. Please find your offer letter attached to this email.</p>
+    <p>Your skills and background align well with our expectations, and we are confident that you will be a valuable addition to our team. As mentioned in the offer, your joining date is <strong>${joiningDate || '(Date)'}</strong>.</p>
+    <p>We kindly request you to carefully review the attached offer letter. If you accept the terms and conditions outlined, please sign the document and send a scanned copy to us at your earliest convenience to confirm your acceptance.</p>
+    <p><strong>On-boarding Location:</strong><br/>
+    Your onboarding will take place at the address below. Please report to the location as instructed, where our team will assist you with the process:<br/>
+    <strong>Levitica Technologies Pvt. Ltd.</strong><br/>
+    1-90/2/46/1, Sriram Plaza, 2nd Floor<br/>
+    Image Hospital Road, Vittal Rao Nagar<br/>
+    Madhapur, Hyderabad, Telangana – 500081.</p>
+    <p><strong>Note:</strong> We also request you to carry your original certificates including your 10th and Intermediate mark sheets for verification purposes, along with one set of Xerox copies of all your certificates. Additionally, please bring one passport-size photograph in hard copy and a soft copy of the same.</p>
+    <p>Should you have any questions or need any clarification, please feel free to reach out. We will be happy to assist you.</p>
+    <p>We look forward to welcoming you to the Levitica family and beginning an exciting journey of growth and innovation together.</p>
   `;
 
   const normalizedAttachments = attachments.map((file, index) => ({

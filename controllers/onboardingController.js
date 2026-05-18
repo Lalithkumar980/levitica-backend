@@ -187,6 +187,7 @@ async function sendOfferLetter(req, res) {
 
   const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
   const candidateName = typeof req.body?.candidateName === 'string' ? req.body.candidateName.trim() : '';
+  const joiningDate = typeof req.body?.joiningDate === 'string' ? req.body.joiningDate.trim() : '';
   const onboardingCandidateId =
     typeof req.body?.onboardingCandidateId === 'string' ? req.body.onboardingCandidateId.trim() : '';
 
@@ -226,6 +227,7 @@ async function sendOfferLetter(req, res) {
   const mail = await sendOfferLetterEmail({
     to: email,
     candidateName,
+    joiningDate,
     attachments,
   });
 
@@ -244,6 +246,14 @@ async function sendOfferLetter(req, res) {
       message: 'Offer letter email was not sent. Configure SMTP in .env or set EMAIL_USE_JSON=true for development.',
       detail: mail.error,
     });
+  }
+
+  if (onboardingCandidateId) {
+    try {
+      await OnboardingCandidate.findByIdAndUpdate(onboardingCandidateId, { joiningDate });
+    } catch (err) {
+      console.error('[onboarding] failed to save joining date', err);
+    }
   }
 
   // Log successful offer letter
