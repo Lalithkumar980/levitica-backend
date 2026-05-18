@@ -113,7 +113,7 @@ async function update(req, res) {
     if (!doc) return res.status(404).json({ message: 'Deal not found' });
     if (!canEditRecord(req, doc)) return res.status(403).json({ message: 'Access denied to this deal' });
     const body = req.body || {};
-    const allowed = ['title', 'company', 'companyId', 'contactId', 'amount', 'stage', 'product', 'owner', 'source', 'industry', 'city', 'closeDate', 'followup', 'notes', 'activities', 'files'];
+    const allowed = ['title', 'company', 'companyId', 'contactId', 'amount', 'stage', 'prob', 'product', 'owner', 'source', 'industry', 'city', 'closeDate', 'followup', 'notes', 'activities', 'files'];
     let stageChanged = false;
     allowed.forEach((key) => {
       if (body[key] !== undefined) {
@@ -121,7 +121,7 @@ async function update(req, res) {
         doc[key] = body[key];
       }
     });
-    if (stageChanged) doc.prob = Deal.getProbabilityForStage(doc.stage);
+    if (stageChanged && body.prob === undefined) doc.prob = Deal.getProbabilityForStage(doc.stage);
     doc.lastAct = new Date();
     if (isRep(req)) doc.owner = req.user._id;
     await doc.save();
