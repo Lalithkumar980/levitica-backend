@@ -118,7 +118,7 @@ async function sendInvite(req, res) {
   }
 
   const inviteUrl = buildInviteUrl(token);
-  const mail = await sendOnboardingInvite({ to: email, inviteUrl });
+  const mail = await sendOnboardingInvite({ to: email, inviteUrl, candidateName, expiresAt, candidateType });
 
   const allowLinkWithoutEmail =
     String(process.env.ONBOARDING_RETURN_INVITE_LINK_ON_EMAIL_FAILURE || '').toLowerCase() === 'true';

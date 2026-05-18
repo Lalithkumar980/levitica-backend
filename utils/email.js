@@ -12,8 +12,123 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 /**
  * Send onboarding invite (Resend)
  */
-async function sendOnboardingInvite({ to, inviteUrl }) {
+async function sendOnboardingInvite({ to, inviteUrl, candidateName, expiresAt, candidateType }) {
   console.log("Function called", { to });
+  
+  const formattedDate = expiresAt ? new Date(expiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : '[Date]';
+
+  const isExperienced = candidateType === 'experienced';
+  
+  const documentsListText = isExperienced ? [
+    '• Aadhaar Card',
+    '• PAN Card',
+    '• 10th Certificate',
+    '• Intermediate / 12th',
+    '• Degree / B.Tech',
+    '• Higher Education (Optional)',
+    '• Passport Photo',
+    '• Father / Guardian ID',
+    '• Mother ID',
+    '• Bank Passbook Front',
+    '• Certifications (Optional)',
+    '• Experience Letters',
+    '• Relieving Letters',
+    '• Offer Letters',
+    '• Hike Letter (Optional)',
+    '• PF Statement',
+    '• UAN Card / Number',
+    '• Last 3 Payslips',
+  ].join('\n') : [
+    '• Aadhaar Card',
+    '• PAN Card',
+    '• 10th Certificate / Memo',
+    '• Intermediate / 12th Certificate',
+    '• Degree / B.Tech Certificate',
+    '• Passport-size Photograph',
+    '• Father / Guardian ID Proof',
+    '• Bank Passbook Front Page',
+    '• Any Relevant Certifications (Optional)',
+  ].join('\n');
+
+  const documentsListHtml = isExperienced ? `
+    • Aadhaar Card<br/>
+    • PAN Card<br/>
+    • 10th Certificate<br/>
+    • Intermediate / 12th<br/>
+    • Degree / B.Tech<br/>
+    • Higher Education (Optional)<br/>
+    • Passport Photo<br/>
+    • Father / Guardian ID<br/>
+    • Mother ID<br/>
+    • Bank Passbook Front<br/>
+    • Certifications (Optional)<br/>
+    • Experience Letters<br/>
+    • Relieving Letters<br/>
+    • Offer Letters<br/>
+    • Hike Letter (Optional)<br/>
+    • PF Statement<br/>
+    • UAN Card / Number<br/>
+    • Last 3 Payslips
+  ` : `
+    • Aadhaar Card<br/>
+    • PAN Card<br/>
+    • 10th Certificate / Memo<br/>
+    • Intermediate / 12th Certificate<br/>
+    • Degree / B.Tech Certificate<br/>
+    • Passport-size Photograph<br/>
+    • Father / Guardian ID Proof<br/>
+    • Bank Passbook Front Page<br/>
+    • Any Relevant Certifications (Optional)
+  `;
+
+  const text = [
+    `Dear ${candidateName || 'Candidate'},`,
+    '',
+    'Greetings from Levitica Technologies Pvt Ltd!',
+    '',
+    'We are pleased to inform you that you are being considered for an opportunity with our organization.',
+    '',
+    `To proceed further with your onboarding and offer letter process, we request you to complete the Candidate Onboarding Form and upload the required documents using the secure invitation link provided below on or before ${formattedDate}.`,
+    '',
+    'Required Documents:',
+    documentsListText,
+    '',
+    'Document Verification Form Link:',
+    inviteUrl,
+    '',
+    'Please ensure that all uploaded documents are clear and valid. Your information and uploads will be securely stored for HR verification purposes.',
+    '',
+    'If you have any questions or require assistance while filling out the form, please feel free to contact us.',
+    '',
+    'Email: info@leviticatechnologies.com',
+    'Phone: +91 9032503559',
+    '',
+    'We look forward to receiving your submission and welcoming you to Levitica Technologies Pvt Ltd.',
+    '',
+    'Best Regards,',
+    'HR Team',
+    'Levitica Technologies Pvt Ltd',
+  ].join('\n');
+
+  const html = `
+    <p>Dear ${candidateName || 'Candidate'},</p>
+    <p>Greetings from Levitica Technologies Pvt Ltd!</p>
+    <p>We are pleased to inform you that you are being considered for an opportunity with our organization.</p>
+    <p>To proceed further with your onboarding and offer letter process, we request you to complete the Candidate Onboarding Form and upload the required documents using the secure invitation link provided below on or before <strong>${formattedDate}</strong>.</p>
+    <p><strong>Required Documents:</strong><br/>
+    ${documentsListHtml}</p>
+    <p><strong>Document Verification Form Link:</strong><br/>
+    <a href="${inviteUrl}">${inviteUrl}</a></p>
+    <p>Please ensure that all uploaded documents are clear and valid. Your information and uploads will be securely stored for HR verification purposes.</p>
+    <p>If you have any questions or require assistance while filling out the form, please feel free to contact us.</p>
+    <p>Email: <a href="mailto:info@leviticatechnologies.com">info@leviticatechnologies.com</a><br/>
+    Phone: +91 9032503559</p>
+    <p>We look forward to receiving your submission and welcoming you to Levitica Technologies Pvt Ltd.</p>
+    <p>Best Regards,<br/>
+    HR Team<br/>
+    Levitica Technologies Pvt Ltd</p>
+  `;
+
   try {
     const { data, error } = await resend.emails.send({
       from: process.env.MAIL_FROM || 'info@leviticatechnologies.com',
@@ -21,13 +136,8 @@ async function sendOnboardingInvite({ to, inviteUrl }) {
       subject:
         process.env.ONBOARDING_INVITE_SUBJECT ||
         'Complete your document verification',
-      html: `
-        <p>You have been invited to complete document verification.</p>
-        <p><a href="${inviteUrl}">Open document verification form</a></p>
-        <p style="color:#666;font-size:12px;">
-          If the link does not work, copy and paste:<br/>${inviteUrl}
-        </p>
-      `,
+      text,
+      html,
     });
 
     if (error) {
