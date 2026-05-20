@@ -188,6 +188,7 @@ async function sendOfferLetter(req, res) {
   const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
   const candidateName = typeof req.body?.candidateName === 'string' ? req.body.candidateName.trim() : '';
   const joiningDate = typeof req.body?.joiningDate === 'string' ? req.body.joiningDate.trim() : '';
+  const role = typeof req.body?.role === 'string' ? req.body.role.trim() : '';
   const onboardingCandidateId =
     typeof req.body?.onboardingCandidateId === 'string' ? req.body.onboardingCandidateId.trim() : '';
 
@@ -228,6 +229,7 @@ async function sendOfferLetter(req, res) {
     to: email,
     candidateName,
     joiningDate,
+    role,
     attachments,
   });
 
@@ -250,9 +252,9 @@ async function sendOfferLetter(req, res) {
 
   if (onboardingCandidateId) {
     try {
-      await OnboardingCandidate.findByIdAndUpdate(onboardingCandidateId, { joiningDate });
+      await OnboardingCandidate.findByIdAndUpdate(onboardingCandidateId, { joiningDate, role });
     } catch (err) {
-      console.error('[onboarding] failed to save joining date', err);
+      console.error('[onboarding] failed to save joining date/role', err);
     }
   }
 

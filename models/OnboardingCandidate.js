@@ -42,6 +42,7 @@ const onboardingCandidateSchema = new mongoose.Schema(
     /** Extra fields from the form (JSON-serializable). */
     formData: { type: mongoose.Schema.Types.Mixed, default: {} },
     joiningDate: { type: String, default: '' },
+    role: { type: String, default: '' },
     invitationToken: { type: String, default: null },
   },
   { timestamps: true }
