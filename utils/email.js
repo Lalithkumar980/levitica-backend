@@ -110,6 +110,8 @@ async function sendOnboardingInvite({ to, inviteUrl, candidateName, expiresAt, c
     'Best Regards,',
     'HR Team',
     'Levitica Technologies Pvt Ltd',
+    'Email: info@leviticatechnologies.com',
+    'Phone: +91 9032503559',
   ].join('\n');
 
   const logoPath = path.join(__dirname, '../assets/Images/Levitica.png');
@@ -129,12 +131,14 @@ async function sendOnboardingInvite({ to, inviteUrl, candidateName, expiresAt, c
     Phone: +91 9032503559</p>
     <p>We look forward to receiving your submission and welcoming you to Levitica Technologies Pvt Ltd.</p>
     <p>Best Regards,</p>
-    <p>
-      <img src="cid:companylogo" alt="Levitica Logo" width="180" style="border: none; display: block; pointer-events: none; user-select: none;" />
+    <p style="text-align: left; margin: 10px 0;">
+      <img src="cid:companylogo" alt="Levitica Logo" width="130" style="border: none; display: inline-block; pointer-events: none; user-select: none;" />
     </p>
     <p>
       HR Team<br/>
-      Levitica Technologies Pvt Ltd
+      Levitica Technologies Pvt Ltd<br/>
+      Email: info@leviticatechnologies.com<br/>
+      Phone: +91 9032503559
     </p>
   `;
 
@@ -224,6 +228,8 @@ async function sendOfferLetterEmail({
     'Best Regards,',
     'HR Team',
     'Levitica Technologies Pvt Ltd',
+    'Email: info@leviticatechnologies.com',
+    'Phone: +91 9032503559',
   ].join('\n');
 
   const logoPath = path.join(__dirname, '../assets/Images/Levitica.png');
@@ -243,12 +249,14 @@ async function sendOfferLetterEmail({
     <p>Should you have any questions or need any clarification, please feel free to reach out. We will be happy to assist you.</p>
     <p>We look forward to welcoming you to the Levitica family and beginning an exciting journey of growth and innovation together.</p>
     <p>Best Regards,</p>
-    <p>
-      <img src="cid:companylogo" alt="Levitica Logo" width="180" style="border: none; display: block; pointer-events: none; user-select: none;" />
+    <p style="text-align: left; margin: 10px 0;">
+      <img src="cid:companylogo" alt="Levitica Logo" width="130" style="border: none; display: inline-block; pointer-events: none; user-select: none;" />
     </p>
     <p>
       HR Team<br/>
-      Levitica Technologies Pvt Ltd
+      Levitica Technologies Pvt Ltd<br/>
+      Email: info@leviticatechnologies.com<br/>
+      Phone: +91 9032503559
     </p>
   `;
 
