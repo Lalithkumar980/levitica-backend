@@ -31,6 +31,8 @@ function isPrivateLanOrigin(origin) {
 
 const fixedOrigins = [
   'http://localhost:3000',
+  'http://localhost:3001',
+
   'http://localhost:8081',
   'https://levitica-mangement.netlify.app',
   'https://levitica-data-management.vercel.app',
