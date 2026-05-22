@@ -3,6 +3,7 @@ const Lead = require('../models/Lead');
 const Deal = require('../models/Deal');
 const Activity = require('../models/Activity');
 const Task = require('../models/Task');
+const { validateRoleAssignment } = require('../utils/roleValidator');
 
 const ALLOWED_ROLES = ['Admin', 'HR Management', 'Sales Manager', 'Finance Management', 'Sales Rep'];
 const ROLE_ALIASES = {
@@ -45,6 +46,14 @@ async function updateUserRole(req, res) {
         message: 'Invalid role. Allowed: Admin, HR Management, Sales Manager, Finance Management, Sales Rep (or alias: manager, rep, hr, finance)',
       });
     }
+
+    // Validate that restricted roles can only have one user
+    // Pass the user ID to exclude the current user from the count
+    const validation = await validateRoleAssignment(roleValue, req.params.id);
+    if (!validation.allowed) {
+      return res.status(400).json({ message: validation.error });
+    }
+
     const user = await User.findByIdAndUpdate(
       req.params.id,
       { role: roleValue },

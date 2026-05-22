@@ -6,6 +6,7 @@ const User = require('../models/User');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { decrypt } = require('../utils/encrypt');
 const { profilePhotoUpload } = require('../middleware/upload');
+const { validateRoleAssignment } = require('../utils/roleValidator');
 
 const ROLE_DEFAULTS = {
   Admin: { viewAll: true, delete: true, export: true, admin: true, bulkImport: true, viewReports: true, modules: ['/dashboard', '/leads', '/contacts', '/companies', '/deals -6'] },
@@ -208,6 +209,13 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
     }
     const r = (role && ALL_ROLES.includes(role)) ? role : 'Sales Rep';
     const defaults = ROLE_DEFAULTS[r] || ROLE_DEFAULTS['Sales Rep'];
+
+    // Validate that restricted roles (Admin, HR Management, Sales Manager) can only have one user
+    const validation = await validateRoleAssignment(r);
+    if (!validation.allowed) {
+      return res.status(400).json({ message: validation.error });
+    }
+
     const existing = await User.findOne({ email: String(email).trim().toLowerCase() });
     if (existing) {
       return res.status(400).json({ message: 'A user with this email already exists' });
@@ -239,7 +247,21 @@ router.put('/:id', authenticate, requireAdmin, async (req, res) => {
     if (!user) return res.status(404).json({ message: 'User not found' });
     if (name != null) user.name = String(name).trim();
     if (email != null) user.email = String(email).trim().toLowerCase();
-    if (role && ALL_ROLES.includes(role)) user.role = role;
+
+    // If role is being changed, validate role assignment rules
+    let newRole = user.role;
+    if (role && ALL_ROLES.includes(role)) {
+      if (role !== user.role) {
+        // Role is being changed, validate that restricted roles can only have one user
+        const validation = await validateRoleAssignment(role, id);
+        if (!validation.allowed) {
+          return res.status(400).json({ message: validation.error });
+        }
+        newRole = role;
+      }
+      user.role = newRole;
+    }
+
     if (department != null) user.department = String(department).trim();
     if (password != null && String(password).trim()) {
       user.password = String(password).trim();

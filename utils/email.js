@@ -107,7 +107,7 @@ async function sendOnboardingInvite({ to, inviteUrl, candidateName, expiresAt, c
     '',
     'We look forward to receiving your submission and welcoming you to Levitica Technologies Pvt Ltd.',
     '',
-    'Best Regards,',
+    'BEST REGARDS,',
     'HR Team',
     'Levitica Technologies Pvt Ltd',
     'Email: info@leviticatechnologies.com',
@@ -130,8 +130,8 @@ async function sendOnboardingInvite({ to, inviteUrl, candidateName, expiresAt, c
     <p>Email: <a href="mailto:info@leviticatechnologies.com">info@leviticatechnologies.com</a><br/>
     Phone: +91 9032503559</p>
     <p>We look forward to receiving your submission and welcoming you to Levitica Technologies Pvt Ltd.</p>
-    <p>Best Regards,</p>
-    <p style="text-align: left; margin: 10px 0;">
+    <p>BEST REGARDS,</p>
+    <p style="text-align: left;">
       <img src="cid:companylogo" alt="Levitica Logo" width="130" style="border: none; display: inline-block; pointer-events: none; user-select: none;" />
     </p>
     <p>
@@ -225,7 +225,7 @@ async function sendOfferLetterEmail({
     '',
     'We look forward to welcoming you to the Levitica family and beginning an exciting journey of growth and innovation together.',
     '',
-    'Best Regards,',
+    'BEST REGARDS,',
     'HR Team',
     'Levitica Technologies Pvt Ltd',
     'Email: info@leviticatechnologies.com',
@@ -248,8 +248,8 @@ async function sendOfferLetterEmail({
     <p><strong>Note:</strong> We also request you to carry your original certificates including your 10th and Intermediate mark sheets for verification purposes, along with one set of Xerox copies of all your certificates. Additionally, please bring one passport-size photograph in hard copy and a soft copy of the same.</p>
     <p>Should you have any questions or need any clarification, please feel free to reach out. We will be happy to assist you.</p>
     <p>We look forward to welcoming you to the Levitica family and beginning an exciting journey of growth and innovation together.</p>
-    <p>Best Regards,</p>
-    <p style="text-align: left; margin: 10px 0;">
+    <p>BEST REGARDS,</p>
+    <p style="text-align: left;">
       <img src="cid:companylogo" alt="Levitica Logo" width="130" style="border: none; display: inline-block; pointer-events: none; user-select: none;" />
     </p>
     <p>

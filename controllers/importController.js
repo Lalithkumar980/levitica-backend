@@ -141,26 +141,32 @@ function rowsFromImportFile(buffer, originalname) {
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     return XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
   }
+  // CSV: convert buffer to string (handles BOM) and stream to csv-parser
   return new Promise((resolve, reject) => {
     const results = [];
-    Readable.from(buffer)
-      .pipe(csv({ skipLines: 0 }))
-      .on('data', (row) => results.push(row))
-      .on('end', () => resolve(results))
-      .on('error', reject);
+    try {
+      const str = buffer.toString('utf8');
+      Readable.from([str])
+        .pipe(csv({ skipLines: 0 }))
+        .on('data', (row) => results.push(row))
+        .on('end', () => resolve(results))
+        .on('error', reject);
+    } catch (err) {
+      reject(err);
+    }
   });
 }
 
 async function uploadLeadsCsv(req, res) {
   try {
     if (!req.file || !req.file.buffer) {
-      return res.status(400).json({ message: 'No file uploaded. Use multipart/form-data with field "file".' });
+      return res.status(400).json({ success: false, message: 'No file uploaded. Use multipart/form-data with field "file".' });
     }
     let rows;
     try {
       rows = await rowsFromImportFile(req.file.buffer, req.file.originalname);
     } catch (readErr) {
-      return res.status(400).json({ message: readErr.message || 'Could not read file' });
+      return res.status(400).json({ success: false, message: readErr.message || 'Could not read file' });
     }
     rows = rows.filter(
       (row) =>
@@ -168,7 +174,23 @@ async function uploadLeadsCsv(req, res) {
         typeof row === 'object' &&
         Object.values(row).some((v) => v != null && String(v).trim() !== '')
     );
-    if (rows.length === 0) return res.status(400).json({ message: 'File has no data rows' });
+    if (rows.length === 0) return res.status(400).json({ success: false, message: 'File has no data rows' });
+
+    // If parsed as objects (Excel or CSV with headers), validate required headers exist
+    const firstRow = rows[0];
+    if (firstRow && typeof firstRow === 'object' && !Array.isArray(firstRow)) {
+      const normalized = Object.keys(firstRow).map((k) => normHeader(k));
+      const missing = [];
+      // require at least fname, lname, phone (aliases handled via HEADER_MAP)
+      ['fname', 'lname', 'phone'].forEach((reqField) => {
+        const aliases = HEADER_MAP[reqField] || [reqField];
+        const found = aliases.some((a) => normalized.indexOf(normHeader(a)) !== -1);
+        if (!found) missing.push(reqField);
+      });
+      if (missing.length) {
+        return res.status(400).json({ success: false, message: 'Missing required columns', missing });
+      }
+    }
 
     const ownerId = req.user._id;
     const results = [];
@@ -218,7 +240,7 @@ async function uploadLeadsCsv(req, res) {
       errors,
     });
     res.status(201).json({
-      message: 'Import completed',
+      success: true,
       imported: results.length,
       duplicates,
       errors,
@@ -226,7 +248,7 @@ async function uploadLeadsCsv(req, res) {
     });
   } catch (err) {
     console.error('Import leads upload error:', err);
-    res.status(500).json({ message: err.message || 'Import failed' });
+    res.status(500).json({ success: false, message: err.message || 'Import failed' });
   }
 }
 
