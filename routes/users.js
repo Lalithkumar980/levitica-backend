@@ -1,4 +1,5 @@
 const express = require('express');
+const { getDriveClient, ensureFolderPath, uploadBufferToFolder, deleteFile } = require('../services/googleDriveService');
 const fs = require('fs');
 const path = require('path');
 const router = express.Router();
@@ -27,20 +28,24 @@ const ROLE_CLASS_MAP = {
 
 function toProfileJson(user) {
   const obj = user.toJSON ? user.toJSON() : { ...user, id: (user._id || user.id).toString() };
-  obj.profilePhotoUrl = user.profilePhoto
+  // Always return a proxy URL so the frontend fetches through our authenticated backend.
+  // This avoids CORS, 429, and 403 issues with Google Drive CDN links.
+  // Append a timestamp so the browser fetches fresh after every upload.
+  const userId = (user._id || user.id).toString();
+  const ts = user.updatedAt ? new Date(user.updatedAt).getTime() : Date.now();
+  obj.profilePhotoUrl = user.profileImageFileId
+    ? `/api/users/${userId}/photo?t=${ts}`
+    : user.profilePhoto
     ? `/api/uploads/profiles/${user.profilePhoto}`
     : null;
+  obj.profileImage = user.profileImage || null;
+  obj.profileImageFileId = user.profileImageFileId || null;
   return obj;
 }
 
+// Deprecated: local file removal no longer needed as photos are stored on Google Drive.
 function removeProfilePhotoFile(filename) {
-  if (!filename) return;
-  const filePath = path.join(__dirname, '..', 'uploads', 'profiles', filename);
-  fs.unlink(filePath, (err) => {
-    if (err && err.code !== 'ENOENT') {
-      console.error('Remove profile photo file error:', err);
-    }
-  });
+  // No operation - retained for backward compatibility
 }
 
 /** GET /api/users/me — current user profile (no password); credentials visible read-only */
@@ -59,14 +64,22 @@ router.get('/me', authenticate, async (req, res) => {
     } catch (e) {
       // ignore decrypt errors (e.g. legacy data)
     }
+    // Use backend proxy URL to avoid CORS/403/429 issues with direct Google Drive links
+    const profilePhotoUrl = user.profileImageFileId
+      ? `/api/users/${id}/photo`
+      : user.profilePhoto
+      ? `/api/uploads/profiles/${user.profilePhoto}`
+      : null;
     res.json({
+      profilePhotoUrl,
+      profileImage: user.profileImage || null,
+      profileImageFileId: user.profileImageFileId || null,
       id,
       name: user.name,
       email: user.email,
       role: user.role,
       department: user.department,
       initials: initialsStr,
-      profilePhotoUrl: user.profilePhoto ? `/api/uploads/profiles/${user.profilePhoto}` : null,
       passwordDisplay,
       phone: user.phone || '',
       city: user.city || '',
@@ -77,7 +90,7 @@ router.get('/me', authenticate, async (req, res) => {
       hobbies: user.hobbies || '',
       bio: user.bio || '',
       dob: user.dob ? new Date(user.dob).toISOString().slice(0, 10) : '',
-      companyAssets: user.companyAssets || '',
+      companyAssets: user.companyAssets || ''
     });
   } catch (err) {
     console.error('Get profile error:', err);
@@ -132,41 +145,56 @@ router.put('/me', authenticate, async (req, res) => {
 
 /** POST /api/users/me/photo — upload profile photo (multipart form, field: photo) */
 router.post('/me/photo', authenticate, (req, res, next) => {
-  profilePhotoUpload(req, res, (err) => {
+  profilePhotoUpload(req, res, async (err) => {
     if (err) {
       return res.status(400).json({ message: err.message || 'Invalid file' });
     }
-    next();
+    try {
+      const user = await User.findById(req.user._id);
+      if (!user) return res.status(404).json({ message: 'User not found' });
+      if (!req.file || !req.file.buffer) {
+        return res.status(400).json({ message: 'No photo file received' });
+      }
+      const drive = await getDriveClient();
+      const folderId = await ensureFolderPath(drive, ['levitca Profile Images']);
+      if (user.profileImageFileId) {
+        await deleteFile(drive, user.profileImageFileId);
+      }
+      const fileName = `${Date.now()}_${req.user._id}.${req.file.mimetype.split('/')[1]}`;
+      const { fileId, fileUrl } = await uploadBufferToFolder({
+        drive,
+        folderId,
+        fileName,
+        buffer: req.file.buffer,
+        mimeType: req.file.mimetype,
+      });
+      user.profileImage = fileUrl;
+      user.profileImageFileId = fileId;
+      await user.save();
+      res.json(toProfileJson(user));
+    } catch (innerErr) {
+      console.error('Upload profile image error:', innerErr);
+      res.status(500).json({ message: 'Failed to upload profile image' });
+    }
   });
-}, async (req, res) => {
-  try {
-    const user = await User.findById(req.user._id);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    if (!req.file || !req.file.filename) {
-      return res.status(400).json({ message: 'No photo file received' });
-    }
-    const previousPhoto = user.profilePhoto;
-    user.profilePhoto = req.file.filename;
-    await user.save();
-    if (previousPhoto && previousPhoto !== req.file.filename) {
-      removeProfilePhotoFile(previousPhoto);
-    }
-    res.json(toProfileJson(user));
-  } catch (err) {
-    console.error('Update profile photo error:', err);
-    res.status(500).json({ message: 'Failed to update profile photo' });
-  }
 });
+
+
+  
 
 /** DELETE /api/users/me/photo — remove profile photo */
 router.delete('/me/photo', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     if (!user) return res.status(404).json({ message: 'User not found' });
-    const previousPhoto = user.profilePhoto;
-    user.profilePhoto = null;
+    const previousFileId = user.profileImageFileId;
+    user.profileImage = null;
+    user.profileImageFileId = null;
     await user.save();
-    removeProfilePhotoFile(previousPhoto);
+    if (previousFileId) {
+      const drive = await getDriveClient();
+      await deleteFile(drive, previousFileId);
+    }
     res.json(toProfileJson(user));
   } catch (err) {
     console.error('Remove profile photo error:', err);

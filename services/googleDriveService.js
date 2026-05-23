@@ -105,7 +105,7 @@ async function ensureFolder(drive, name, parentId = 'root') {
  * @param {string} fileId
  */
 async function makeFilePublicLink(drive, fileId) {
-  await drive.permissions.create({
+  const result = await drive.permissions.create({
     fileId,
     requestBody: {
       type: 'anyone',
@@ -113,6 +113,8 @@ async function makeFilePublicLink(drive, fileId) {
     },
     fields: 'id',
   });
+  logDrive('Made file public, permission id:', result.data.id);
+  return result;
 }
 
 /**
@@ -120,7 +122,9 @@ async function makeFilePublicLink(drive, fileId) {
  * @param {string} fileId
  */
 function buildFileViewUrl(fileId) {
-  return `https://drive.google.com/file/d/${fileId}/view`;
+  // Use thumbnail URL — works without CORS and doesn't redirect through Drive's virus-check page.
+  // sz=s400 gives up to 400px dimension.
+  return `https://lh3.googleusercontent.com/d/${fileId}=s400`;
 }
 
 /**
@@ -186,6 +190,10 @@ function sanitizeSegment(name) {
   return s || 'candidate';
 }
 
+async function deleteFile(drive, fileId) {
+  await drive.files.delete({ fileId });
+}
+
 module.exports = {
   trimEnv,
   getDriveClient,
@@ -194,6 +202,7 @@ module.exports = {
   uploadBufferToFolder,
   makeFilePublicLink,
   buildFileViewUrl,
+  deleteFile,
   sanitizeSegment,
   logDrive,
 };

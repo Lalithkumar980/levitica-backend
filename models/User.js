@@ -17,7 +17,9 @@ const userSchema = new mongoose.Schema(
     bulkImport: { type: Boolean, default: false },
     viewReports: { type: Boolean, default: true },
     modules: { type: [String], default: [] },
-    profilePhoto: { type: String, default: null, trim: true },
+    profilePhoto: { type: String, default: null, trim: true }, // legacy local filename (kept for backward compatibility)
+profileImage: { type: String, default: null, trim: true }, // Google Drive public URL
+profileImageFileId: { type: String, default: null, trim: true }, // Google Drive file ID for deletion
     // Profile page (edit by user)
     phone: { type: String, default: '', trim: true },
     city: { type: String, default: '', trim: true },
