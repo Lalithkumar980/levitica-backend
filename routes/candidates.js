@@ -59,6 +59,26 @@ function normalizeSource(v) {
   return SOURCE_OPTIONS.includes(s) ? s : 'Direct';
 }
 
+async function logDocumentReceived(candidate, performedBy) {
+  if (!candidate || !candidate.resumeUrl) return;
+
+  const filename = String(candidate.resumeFilename || '').trim() || 'Resume';
+
+  await logHRActivity({
+    candidateId: candidate._id,
+    candidateName: candidate.name,
+    type: 'document_verification',
+    title: `Documents received for ${candidate.name}`,
+    subtitle: filename,
+    icon: 'upload',
+    performedBy: performedBy || 'System',
+    metadata: {
+      resumeUrl: candidate.resumeUrl,
+      resumeFilename: candidate.resumeFilename || filename,
+    },
+  });
+}
+
 /** GET /api/candidates — list with optional filters */
 router.get('/', async (req, res) => {
   try {
@@ -177,6 +197,10 @@ router.post('/intake', (req, res, next) => {
       icon: 'person',
       performedBy: req.user?.name || hrName,
     });
+
+    if (doc.resumeUrl) {
+      await logDocumentReceived(doc, req.user?.name || hrName);
+    }
 
     res.status(201).json(doc.toJSON());
 
@@ -543,6 +567,10 @@ router.put('/:id', async (req, res) => {
     if (!isValidObjectId(id)) {
       return res.status(404).json({ message: 'Candidate not found' });
     }
+
+    const existing = await Candidate.findById(id);
+    if (!existing) return res.status(404).json({ message: 'Candidate not found' });
+
     const body = req.body || {};
     const set = {};
     const assign = (key, val) => {
@@ -581,11 +609,19 @@ router.put('/:id', async (req, res) => {
     if (body.pipelineStage !== undefined && PIPELINE_STAGES.includes(body.pipelineStage)) {
       set.pipelineStage = body.pipelineStage;
     }
-    assign('resumeUrl', body.resumeUrl);
+
+    const nextResumeUrl = body.resumeUrl === undefined ? undefined : String(body.resumeUrl).trim();
+    const hasNewResume = Boolean(nextResumeUrl) && String(existing.resumeUrl || '').trim() !== nextResumeUrl;
+    assign('resumeUrl', nextResumeUrl);
     assign('resumeFilename', body.resumeFilename);
 
     const doc = await Candidate.findByIdAndUpdate(id, { $set: set }, { new: true, runValidators: true });
     if (!doc) return res.status(404).json({ message: 'Candidate not found' });
+
+    if (hasNewResume) {
+      await logDocumentReceived(doc, req.user?.name || 'System');
+    }
+
     res.json(doc.toJSON());
   } catch (err) {
     console.error('Candidate update error:', err);

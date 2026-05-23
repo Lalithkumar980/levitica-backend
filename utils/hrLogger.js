@@ -3,7 +3,7 @@ const HRActivity = require('../models/HRActivity');
 /**
  * Log an HR activity event for the dashboard.
  */
-async function logHRActivity({ candidateId, candidateName, type, title, subtitle, icon, performedBy }) {
+async function logHRActivity({ candidateId, candidateName, type, title, subtitle, icon, performedBy, metadata }) {
   try {
     await HRActivity.create({
       candidateId: candidateId || null,
@@ -13,6 +13,7 @@ async function logHRActivity({ candidateId, candidateName, type, title, subtitle
       subtitle: subtitle || '',
       icon: icon || 'person',
       performedBy: performedBy || 'System',
+      metadata: metadata || {},
     });
   } catch (err) {
     console.error('Failed to log HR activity:', err);

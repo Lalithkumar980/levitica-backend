@@ -132,6 +132,12 @@ async function sendInvite(req, res) {
       subtitle: `Error: ${mail.error || 'Unknown error'}`,
       icon: 'person', // Could use a specific 'fail' icon if added to UI
       performedBy: req.user?.name || 'HR',
+      metadata: {
+        provider: mail.provider || 'resend',
+        email: email,
+        messageId: mail.messageId || null,
+        error: mail.error || null,
+      },
     });
 
     if (allowLinkWithoutEmail) {
@@ -162,14 +168,27 @@ async function sendInvite(req, res) {
     candidateName,
     type: 'onboarding',
     title: `Document verification sent to ${candidateName}`,
-    subtitle: `Email: ${email}`,
+    subtitle: `Email: ${email}${mail.messageId ? ` · Mail ID: ${mail.messageId}` : ''}`,
     performedBy: req.user?.name || 'HR',
+    metadata: {
+      provider: mail.provider || 'resend',
+      email,
+      messageId: mail.messageId || null,
+    },
   });
 
   return res.status(201).json({
     message: 'Document verification sent',
     email,
     expiresAt: invitation.expiresAt,
+    emailSent: true,
+    messageId: mail.messageId || null,
+    notification: {
+      title: `Document verification sent to ${candidateName}`,
+      subtitle: `Email: ${email}${mail.messageId ? ` · Mail ID: ${mail.messageId}` : ''}`,
+      icon: 'person',
+      type: 'onboarding',
+    },
   });
 
 }
@@ -241,10 +260,15 @@ async function sendOfferLetter(req, res) {
       title: `Failed to send offer letter to ${candidateName || email}`,
       subtitle: `Error: ${mail.error || 'Unknown error'}`,
       performedBy: req.user?.name || 'HR',
+      metadata: {
+        provider: mail.provider || 'resend',
+        email,
+        messageId: mail.messageId || null,
+        error: mail.error || null,
+      },
     });
 
     return res.status(502).json({
-
       message: 'Offer letter email was not sent. Configure SMTP in .env or set EMAIL_USE_JSON=true for development.',
       detail: mail.error,
     });
@@ -263,14 +287,28 @@ async function sendOfferLetter(req, res) {
     candidateName: candidateName || email,
     type: 'joining',
     title: `Offer letter sent to ${candidateName || email}`,
-    subtitle: `Attachments: ${attachments.length}`,
+    subtitle: `Email: ${email}${mail.messageId ? ` · Mail ID: ${mail.messageId}` : ''}`,
     performedBy: req.user?.name || 'HR',
+    metadata: {
+      provider: mail.provider || 'resend',
+      email,
+      messageId: mail.messageId || null,
+      attachmentCount: attachments.length,
+    },
   });
 
   return res.status(201).json({
     message: 'Offer letter sent successfully',
     email,
     attachmentCount: attachments.length,
+    emailSent: true,
+    messageId: mail.messageId || null,
+    notification: {
+      title: `Offer letter sent to ${candidateName || email}`,
+      subtitle: `Email: ${email}${mail.messageId ? ` · Mail ID: ${mail.messageId}` : ''}`,
+      icon: 'email',
+      type: 'joining',
+    },
   });
 
 }
@@ -542,6 +580,26 @@ async function submitOnboarding(req, res) {
     email,
     fileCount: fileEntries.length,
   });
+
+  // Log successful onboarding submission for HR activity / notification feed
+  try {
+    await logHRActivity({
+      candidateId: candidate._id.toString(),
+      candidateName: name,
+      type: 'document_verification',
+      title: `Documents submitted by ${name}`,
+      subtitle: `Please check the documents`,
+      icon: 'mail',
+      performedBy: name,
+      metadata: {
+        email,
+        submissionId: candidate._id.toString(),
+        fileCount: fileEntries.length,
+      },
+    });
+  } catch (logErr) {
+    console.error('[onboarding] failed to log HR activity for submission', logErr);
+  }
 
   return res.status(201).json({
     message: 'Document verification submitted successfully',

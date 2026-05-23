@@ -7,11 +7,19 @@ const HRActivity = require('../models/HRActivity');
 router.use(authenticate);
 
 
-function formatDate(d) {
+function formatDateTime(d) {
   try {
     const dt = new Date(d);
     if (Number.isNaN(dt.getTime())) return null;
-    return dt.toISOString().slice(0, 10);
+
+    return dt.toLocaleString(undefined, {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
   } catch {
     return null;
   }
@@ -43,7 +51,6 @@ router.get('/recent-activity', async (req, res) => {
 
     const legacyActivity = candidates.map((c) => {
       const name = safeStr(c.name) || 'Candidate';
-      const created = formatDate(c.createdAt);
       const offer = safeStr(c.offer);
       const onboarding = safeStr(c.onboarding);
 
@@ -62,17 +69,19 @@ router.get('/recent-activity', async (req, res) => {
       }
 
       const rolePart = safeStr(c.position) && safeStr(c.position) !== '—' ? c.position : '';
-      const subtitle = [rolePart, formatDate(sortDate)].filter(Boolean).join(' · ');
+      const subtitle = [rolePart, formatDateTime(sortDate)].filter(Boolean).join(' · ');
 
-      return { type, title, subtitle, icon, sortDate };
+      return { type, title, subtitle, icon, sortDate, timestamp: sortDate };
     });
 
     const modernActivity = logs.map(l => ({
       type: l.type,
       title: l.title,
-      subtitle: [l.subtitle, formatDate(l.createdAt)].filter(Boolean).join(' · '),
+      subtitle: [l.subtitle, formatDateTime(l.createdAt)].filter(Boolean).join(' · '),
       icon: l.icon || 'person',
-      sortDate: l.createdAt
+      metadata: l.metadata || {},
+      sortDate: l.createdAt,
+      timestamp: l.createdAt
     }));
 
     // Merge and sort

@@ -18,6 +18,7 @@ const HRActivitySchema = new mongoose.Schema(
     subtitle: { type: String },
     icon: { type: String, default: 'person' },
     performedBy: { type: String }, // User name
+    metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
   },
   { timestamps: true }
 );

@@ -162,13 +162,13 @@ async function sendOnboardingInvite({ to, inviteUrl, candidateName, expiresAt, c
 
     if (error) {
       console.error("❌ RESEND ERROR:", error);
-      logEmail('resend failed', { to, error: error.message || error });
+      logEmail('resend failed', { to, provider: 'resend', error: error.message || error });
       return { ok: false, error: error.message || 'Resend failed to send email' };
     }
 
     console.log("RESEND SUCCESS:", data);
-    logEmail('invite sent via resend', { to, id: data.id });
-    return { ok: true, messageId: data.id };
+    logEmail('invite sent via resend', { to, provider: 'resend', messageId: data.id });
+    return { ok: true, messageId: data.id, provider: 'resend' };
   } catch (err) {
     console.error("❌ CRITICAL RESEND ERROR:", err);
     const message = err instanceof Error ? err.message : String(err);
@@ -287,13 +287,13 @@ async function sendOfferLetterEmail({
 
     if (error) {
       console.error("❌ RESEND ERROR:", error);
-      logEmail('resend failed', { to, error: error.message || error });
+      logEmail('resend failed', { to, provider: 'resend', error: error.message || error });
       return { ok: false, error: error.message || 'Resend failed to send email' };
     }
 
     console.log("RESEND SUCCESS:", data);
-    logEmail('offer letter sent via resend', { to, id: data.id });
-    return { ok: true, messageId: data.id };
+    logEmail('offer letter sent via resend', { to, provider: 'resend', messageId: data.id });
+    return { ok: true, messageId: data.id, provider: 'resend' };
   } catch (err) {
     console.error("❌ CRITICAL RESEND ERROR:", err);
     const message = err instanceof Error ? err.message : String(err);
