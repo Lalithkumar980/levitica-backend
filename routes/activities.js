@@ -6,6 +6,7 @@ const activityController = require('../controllers/activityController');
 
 router.get('/calls', activityController.listCalls);
 router.get('/emails', activityController.listEmails);
+router.get('/recent-activity', activityController.recentActivity);
 router.get('/', activityController.list);
 router.post('/', callRecordingUpload, activityController.create);
 router.get('/:id', activityController.getOne);

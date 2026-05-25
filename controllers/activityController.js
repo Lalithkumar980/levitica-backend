@@ -155,6 +155,52 @@ async function remove(req, res) {
   }
 }
 
+function formatDateTime(d) {
+  if (!d) return '';
+  const date = new Date(d);
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+async function recentActivity(req, res) {
+  try {
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 10, 1), 50);
+    const filter = buildActivityFilter(req);
+    
+    const logs = await Activity.find(filter)
+      .populate('rep', 'name')
+      .populate('dealId', 'title company')
+      .populate('contactId', 'fname lname company')
+      .sort({ date: -1 })
+      .limit(limit)
+      .lean();
+
+    const formatted = logs.map(l => {
+      let icon = 'phone';
+      if (l.type === 'Email') icon = 'mail';
+      if (l.type === 'Meeting' || l.type === 'Demo') icon = 'calendar';
+      if (l.type === 'Note') icon = 'edit';
+      if (l.type === 'Task') icon = 'check-square';
+
+      const companyName = l.company || (l.dealId && l.dealId.company) || (l.contactId && l.contactId.company) || '';
+      
+      return {
+        id: l._id,
+        type: l.type.toLowerCase(),
+        title: `${l.type}: ${l.subject}`,
+        subtitle: [companyName, formatDateTime(l.date)].filter(Boolean).join(' · '),
+        icon: icon,
+        sortDate: l.date,
+        timestamp: l.date
+      };
+    });
+
+    res.json({ activity: formatted });
+  } catch (err) {
+    console.error('Activities recent-activity error:', err);
+    res.status(500).json({ message: 'Failed to fetch recent activities' });
+  }
+}
+
 module.exports = {
   listCalls,
   listEmails,
@@ -163,4 +209,5 @@ module.exports = {
   getOne,
   update,
   remove,
+  recentActivity,
 };
