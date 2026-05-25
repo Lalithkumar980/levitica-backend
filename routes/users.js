@@ -98,6 +98,42 @@ router.get('/me', authenticate, async (req, res) => {
   }
 });
 
+/** GET /api/users/:id/photo — proxy profile photo from Google Drive */
+router.get('/:id/photo', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).lean();
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    
+    // Proxy the image stream from Google Drive
+    if (user.profileImageFileId) {
+      const drive = await getDriveClient();
+      const fileStream = await drive.files.get({
+        fileId: user.profileImageFileId,
+        alt: 'media'
+      }, { responseType: 'stream' });
+      
+      res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 1 day
+      return fileStream.data
+        .on('error', (err) => {
+          console.error('Error proxying image from Drive:', err);
+          if (!res.headersSent) res.status(500).end();
+        })
+        .pipe(res);
+    }
+    
+    // Fallback for old local files
+    if (user.profilePhoto) {
+      return res.redirect(`/api/uploads/profiles/${user.profilePhoto}`);
+    }
+    return res.status(404).json({ message: 'Photo not found' });
+  } catch (err) {
+    console.error('Get profile photo error:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ message: 'Failed to get profile photo' });
+    }
+  }
+});
+
 /** PUT /api/users/me — update own profile (no credentials) */
 const ME_EDIT_FIELDS = ['name', 'phone', 'city', 'address', 'company', 'experience', 'skills', 'hobbies', 'bio', 'companyAssets', 'dob'];
 router.put('/me', authenticate, async (req, res) => {
@@ -190,6 +226,7 @@ router.delete('/me/photo', authenticate, async (req, res) => {
     const previousFileId = user.profileImageFileId;
     user.profileImage = null;
     user.profileImageFileId = null;
+    user.profilePhoto = null;
     await user.save();
     if (previousFileId) {
       const drive = await getDriveClient();
