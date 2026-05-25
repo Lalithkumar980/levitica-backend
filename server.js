@@ -1,9 +1,11 @@
 require("dotenv").config({ path: require("path").join(__dirname, ".env") });
+const http = require("http");
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
 const mongoose = require("mongoose");
 const connectDB = require("./config/db");
+const { attachWss, broadcast } = require("./utils/broadcast");
 
 const app = express();
 app.set("trust proxy", 1);
@@ -265,7 +267,36 @@ app.use((err, req, res, next) => {
 async function start() {
   await connectDB();
 
-  app.listen(PORT, () => {
+  // Create HTTP server from express app so we can share the port with WebSocket
+  const server = http.createServer(app);
+
+  // Attach WebSocket server — clients connect to ws://<host>:<PORT>/ws
+  let WebSocketServer;
+  try {
+    ({ WebSocketServer } = require("ws"));
+  } catch (_) {
+    // 'ws' package not installed — real-time notifications will not work.
+    // Run: npm install ws
+    console.warn("[ws] package not found — WebSocket notifications disabled. Run: npm install ws");
+  }
+
+  if (WebSocketServer) {
+    const wss = new WebSocketServer({ server });
+    attachWss(wss);
+
+    wss.on("connection", (ws, req) => {
+      // Send a welcome ping so the client knows the socket is alive
+      try {
+        ws.send(JSON.stringify({ type: "connected", message: "Levitica notification socket ready" }));
+      } catch (_) {}
+
+      ws.on("error", () => {});
+    });
+
+    console.log(`[ws] WebSocket server active on ws://localhost:${PORT}`);
+  }
+
+  server.listen(PORT, () => {
     console.log(`Server listening on http://localhost:${PORT}`);
   });
 }
@@ -277,3 +308,5 @@ start().catch((err) => {
   );
   process.exit(1);
 });
+
+module.exports = { broadcast };

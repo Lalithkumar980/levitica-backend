@@ -1,4 +1,5 @@
 const FinanceActivity = require("../models/FinanceActivity");
+const { broadcast } = require("./broadcast");
 
 function getActorName(req) {
   if (!req || !req.user) return "System";
@@ -24,7 +25,20 @@ async function recordFinanceActivity(
     metadata: metadata || {},
   };
   try {
-    return await FinanceActivity.create(payload);
+    const doc = await FinanceActivity.create(payload);
+
+    // Broadcast real-time notification to all connected WebSocket clients
+    broadcast({
+      type,
+      data: {
+        title: payload.title,
+        subtitle: payload.subtitle,
+        createdAt: doc.createdAt,
+        ...metadata,
+      },
+    });
+
+    return doc;
   } catch (err) {
     console.error("Failed to record finance activity:", err);
     return null;
@@ -34,3 +48,4 @@ async function recordFinanceActivity(
 module.exports = {
   recordFinanceActivity,
 };
+
