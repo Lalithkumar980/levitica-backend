@@ -1,6 +1,7 @@
-const mongoose = require('mongoose');
-const Payment = require('../models/Payment');
-const Invoice = require('../models/Invoice');
+const mongoose = require("mongoose");
+const Payment = require("../models/Payment");
+const Invoice = require("../models/Invoice");
+const { recordFinanceActivity } = require("../utils/financeActivity");
 
 function toNumber(v) {
   if (v === undefined || v === null) return undefined;
@@ -9,18 +10,20 @@ function toNumber(v) {
 }
 
 function parseDate(v) {
-  if (v === undefined || v === null || v === '') return undefined;
+  if (v === undefined || v === null || v === "") return undefined;
   if (v instanceof Date) return v;
   const s = String(v).trim();
   if (!s) return undefined;
-  const iso = s.includes('-') && s.length === 10 && s.split('-')[0].length === 4;
+  const iso =
+    s.includes("-") && s.length === 10 && s.split("-")[0].length === 4;
   if (iso) return new Date(s);
   const parts = s.split(/[-/]/);
   if (parts.length === 3) {
     const day = parseInt(parts[0], 10);
     const month = parseInt(parts[1], 10) - 1;
     const year = parseInt(parts[2], 10);
-    if (!isNaN(day) && !isNaN(month) && !isNaN(year)) return new Date(year, month, day);
+    if (!isNaN(day) && !isNaN(month) && !isNaN(year))
+      return new Date(year, month, day);
   }
   const d = new Date(s);
   return isNaN(d.getTime()) ? undefined : d;
@@ -55,7 +58,7 @@ async function recalculateInvoiceFromPayments(invoiceRef) {
 
   const [agg] = await Payment.aggregate([
     { $match: { invoiceRef: ref } },
-    { $group: { _id: null, totalPaid: { $sum: '$amount' } } },
+    { $group: { _id: null, totalPaid: { $sum: "$amount" } } },
   ]);
   const totalPaid = agg?.totalPaid ?? 0;
 
@@ -64,29 +67,30 @@ async function recalculateInvoiceFromPayments(invoiceRef) {
     .lean();
 
   const now = new Date();
-  const hasDueDate = invoice.dueDate instanceof Date && !isNaN(invoice.dueDate.getTime());
+  const hasDueDate =
+    invoice.dueDate instanceof Date && !isNaN(invoice.dueDate.getTime());
   const isOverdue = hasDueDate && invoice.dueDate.getTime() < now.getTime();
 
-  let newStatus = 'Pending';
+  let newStatus = "Pending";
   if (total <= 0) {
-    newStatus = totalPaid > 0 ? 'Paid' : 'Pending';
+    newStatus = totalPaid > 0 ? "Paid" : "Pending";
   } else if (totalPaid >= total) {
-    newStatus = 'Paid';
+    newStatus = "Paid";
   } else if (totalPaid > 0) {
-    newStatus = 'Partial';
+    newStatus = "Partial";
   } else {
-    newStatus = isOverdue ? 'Overdue' : 'Pending';
+    newStatus = isOverdue ? "Overdue" : "Pending";
   }
 
   invoice.status = newStatus;
 
-  if (newStatus === 'Paid' || newStatus === 'Partial') {
+  if (newStatus === "Paid" || newStatus === "Partial") {
     invoice.paidDate = lastPayment?.date || now;
-    invoice.paymentMethod = (lastPayment?.method || '').toString().trim();
+    invoice.paymentMethod = (lastPayment?.method || "").toString().trim();
   } else {
     // Clear stale payment info when invoice is not paid.
     invoice.paidDate = undefined;
-    invoice.paymentMethod = '';
+    invoice.paymentMethod = "";
   }
 
   await invoice.save();
@@ -98,32 +102,36 @@ async function list(req, res) {
     if (req.query.search && req.query.search.trim()) {
       const q = req.query.search.trim();
       filter.$or = [
-        { client: new RegExp(q, 'i') },
-        { referenceNo: new RegExp(q, 'i') },
+        { client: new RegExp(q, "i") },
+        { referenceNo: new RegExp(q, "i") },
       ];
     }
     const page = parseInt(req.query.page, 10) || 1;
     const limit = Math.min(parseInt(req.query.limit, 10) || 50, 500);
     const skip = (page - 1) * limit;
     const [items, total] = await Promise.all([
-      Payment.find(filter).sort({ date: -1, createdAt: -1 }).skip(skip).limit(limit).lean(),
+      Payment.find(filter)
+        .sort({ date: -1, createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
       Payment.countDocuments(filter),
     ]);
     res.json({ items, total, page, pages: Math.ceil(total / limit) || 1 });
   } catch (err) {
-    console.error('Payments list error:', err);
-    res.status(500).json({ message: 'Failed to fetch payments' });
+    console.error("Payments list error:", err);
+    res.status(500).json({ message: "Failed to fetch payments" });
   }
 }
 
 async function getOne(req, res) {
   try {
     const doc = await Payment.findById(req.params.id).lean();
-    if (!doc) return res.status(404).json({ message: 'Payment not found' });
+    if (!doc) return res.status(404).json({ message: "Payment not found" });
     res.json(doc);
   } catch (err) {
-    console.error('Payment get error:', err);
-    res.status(500).json({ message: 'Failed to fetch payment' });
+    console.error("Payment get error:", err);
+    res.status(500).json({ message: "Failed to fetch payment" });
   }
 }
 
@@ -132,56 +140,86 @@ async function create(req, res) {
     const body = req.body || {};
     const amount = toNumber(body.amount) ?? 0;
     const payload = {
-      client: body.client != null ? String(body.client).trim() : '',
+      client: body.client != null ? String(body.client).trim() : "",
       amount,
       date: parseDate(body.date),
-      method: body.method != null ? String(body.method).trim() : (body.paymentMethod != null ? String(body.paymentMethod).trim() : ''),
-      referenceNo: body.referenceNo != null ? String(body.referenceNo).trim() : '',
-      invoiceRef: body.invoiceRef != null ? String(body.invoiceRef).trim() : '',
-      notes: body.notes != null ? String(body.notes).trim() : '',
+      method:
+        body.method != null
+          ? String(body.method).trim()
+          : body.paymentMethod != null
+            ? String(body.paymentMethod).trim()
+            : "",
+      referenceNo:
+        body.referenceNo != null ? String(body.referenceNo).trim() : "",
+      invoiceRef: body.invoiceRef != null ? String(body.invoiceRef).trim() : "",
+      notes: body.notes != null ? String(body.notes).trim() : "",
     };
     const doc = await Payment.create(payload);
     await recalculateInvoiceFromPayments(payload.invoiceRef);
+    try {
+      await recordFinanceActivity(req, {
+        type: "payment_added",
+        title: `Payment received: ₹${Number(doc.amount || 0).toFixed(2)}`,
+        subtitle: `${doc.client || "Client"}${doc.invoiceRef ? ` · Invoice ${doc.invoiceRef}` : ""}`,
+        icon: "payment",
+        metadata: {
+          paymentId: doc._id,
+          invoiceRef: doc.invoiceRef,
+        },
+      });
+    } catch (err) {
+      console.error("Failed to log payment finance activity:", err);
+    }
     res.status(201).json(doc);
   } catch (err) {
-    console.error('Payment create error:', err);
-    res.status(500).json({ message: err.message || 'Failed to create payment' });
+    console.error("Payment create error:", err);
+    res
+      .status(500)
+      .json({ message: err.message || "Failed to create payment" });
   }
 }
 
 async function update(req, res) {
   try {
     const doc = await Payment.findById(req.params.id);
-    if (!doc) return res.status(404).json({ message: 'Payment not found' });
+    if (!doc) return res.status(404).json({ message: "Payment not found" });
     const oldInvoiceRef = doc.invoiceRef;
     const body = req.body || {};
     if (body.client !== undefined) doc.client = String(body.client).trim();
     if (body.amount !== undefined) doc.amount = toNumber(body.amount) ?? 0;
     if (body.date !== undefined) doc.date = parseDate(body.date);
     if (body.method !== undefined) doc.method = String(body.method).trim();
-    if (body.paymentMethod !== undefined) doc.method = String(body.paymentMethod).trim();
-    if (body.referenceNo !== undefined) doc.referenceNo = String(body.referenceNo).trim();
-    if (body.invoiceRef !== undefined) doc.invoiceRef = String(body.invoiceRef).trim();
+    if (body.paymentMethod !== undefined)
+      doc.method = String(body.paymentMethod).trim();
+    if (body.referenceNo !== undefined)
+      doc.referenceNo = String(body.referenceNo).trim();
+    if (body.invoiceRef !== undefined)
+      doc.invoiceRef = String(body.invoiceRef).trim();
     if (body.notes !== undefined) doc.notes = String(body.notes).trim();
     await doc.save();
     await recalculateInvoiceFromPayments(oldInvoiceRef);
-    if (doc.invoiceRef !== oldInvoiceRef) await recalculateInvoiceFromPayments(doc.invoiceRef);
+    if (doc.invoiceRef !== oldInvoiceRef)
+      await recalculateInvoiceFromPayments(doc.invoiceRef);
     res.json(doc);
   } catch (err) {
-    console.error('Payment update error:', err);
-    res.status(500).json({ message: err.message || 'Failed to update payment' });
+    console.error("Payment update error:", err);
+    res
+      .status(500)
+      .json({ message: err.message || "Failed to update payment" });
   }
 }
 
 async function remove(req, res) {
   try {
     const doc = await Payment.findByIdAndDelete(req.params.id);
-    if (!doc) return res.status(404).json({ message: 'Payment not found' });
+    if (!doc) return res.status(404).json({ message: "Payment not found" });
     await recalculateInvoiceFromPayments(doc.invoiceRef);
-    res.json({ message: 'Payment deleted', id: doc._id });
+    res.json({ message: "Payment deleted", id: doc._id });
   } catch (err) {
-    console.error('Payment delete error:', err);
-    res.status(500).json({ message: err.message || 'Failed to delete payment' });
+    console.error("Payment delete error:", err);
+    res
+      .status(500)
+      .json({ message: err.message || "Failed to delete payment" });
   }
 }
 

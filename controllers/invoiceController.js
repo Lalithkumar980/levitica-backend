@@ -1,5 +1,6 @@
-const Invoice = require('../models/Invoice');
-const Payment = require('../models/Payment');
+const Invoice = require("../models/Invoice");
+const Payment = require("../models/Payment");
+const { recordFinanceActivity } = require("../utils/financeActivity");
 
 const DEFAULT_GST_RATE = 18;
 
@@ -10,18 +11,20 @@ function toNumber(v) {
 }
 
 function parseDate(v) {
-  if (v === undefined || v === null || v === '') return undefined;
+  if (v === undefined || v === null || v === "") return undefined;
   if (v instanceof Date) return v;
   const s = String(v).trim();
   if (!s) return undefined;
-  const iso = s.includes('-') && s.length === 10 && s.split('-')[0].length === 4;
+  const iso =
+    s.includes("-") && s.length === 10 && s.split("-")[0].length === 4;
   if (iso) return new Date(s);
   const parts = s.split(/[-/]/);
   if (parts.length === 3) {
     const day = parseInt(parts[0], 10);
     const month = parseInt(parts[1], 10) - 1;
     const year = parseInt(parts[2], 10);
-    if (!isNaN(day) && !isNaN(month) && !isNaN(year)) return new Date(year, month, day);
+    if (!isNaN(day) && !isNaN(month) && !isNaN(year))
+      return new Date(year, month, day);
   }
   const d = new Date(s);
   return isNaN(d.getTime()) ? undefined : d;
@@ -39,11 +42,11 @@ async function generateInvoiceNo() {
   const latest = await Invoice.findOne({ invoiceNo: /INV-\d+/i })
     .sort({ createdAt: -1 })
     .lean();
-  if (!latest?.invoiceNo) return 'INV-00001';
+  if (!latest?.invoiceNo) return "INV-00001";
   const match = String(latest.invoiceNo).match(/INV-(\d+)/i);
   const current = match ? Number(match[1]) : 0;
   const next = (Number.isFinite(current) ? current : 0) + 1;
-  return `INV-${String(next).padStart(5, '0')}`;
+  return `INV-${String(next).padStart(5, "0")}`;
 }
 
 async function list(req, res) {
@@ -54,15 +57,19 @@ async function list(req, res) {
     if (req.query.search && req.query.search.trim()) {
       const q = req.query.search.trim();
       filter.$or = [
-        { client: new RegExp(q, 'i') },
-        { invoiceNo: new RegExp(q, 'i') },
+        { client: new RegExp(q, "i") },
+        { invoiceNo: new RegExp(q, "i") },
       ];
     }
     const page = parseInt(req.query.page, 10) || 1;
     const limit = Math.min(parseInt(req.query.limit, 10) || 50, 500);
     const skip = (page - 1) * limit;
     const [items, total] = await Promise.all([
-      Invoice.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      Invoice.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
       Invoice.countDocuments(filter),
     ]);
 
@@ -73,7 +80,7 @@ async function list(req, res) {
     if (invoiceNos.length > 0) {
       const aggs = await Payment.aggregate([
         { $match: { invoiceRef: { $in: invoiceNos } } },
-        { $group: { _id: '$invoiceRef', totalPaid: { $sum: '$amount' } } },
+        { $group: { _id: "$invoiceRef", totalPaid: { $sum: "$amount" } } },
       ]);
       paymentMap = aggs.reduce((acc, a) => {
         acc[a._id] = a.totalPaid;
@@ -88,21 +95,26 @@ async function list(req, res) {
       return { ...inv, paidAmount, outstanding };
     });
 
-    res.json({ items: nextItems, total, page, pages: Math.ceil(total / limit) || 1 });
+    res.json({
+      items: nextItems,
+      total,
+      page,
+      pages: Math.ceil(total / limit) || 1,
+    });
   } catch (err) {
-    console.error('Invoices list error:', err);
-    res.status(500).json({ message: 'Failed to fetch invoices' });
+    console.error("Invoices list error:", err);
+    res.status(500).json({ message: "Failed to fetch invoices" });
   }
 }
 
 async function getOne(req, res) {
   try {
     const doc = await Invoice.findById(req.params.id).lean();
-    if (!doc) return res.status(404).json({ message: 'Invoice not found' });
+    if (!doc) return res.status(404).json({ message: "Invoice not found" });
     res.json(doc);
   } catch (err) {
-    console.error('Invoice get error:', err);
-    res.status(500).json({ message: 'Failed to fetch invoice' });
+    console.error("Invoice get error:", err);
+    res.status(500).json({ message: "Failed to fetch invoice" });
   }
 }
 
@@ -113,40 +125,65 @@ async function create(req, res) {
     const gstRate = normalizeGstRate(body.gstRate);
     const gst = Math.round((baseAmount * gstRate) / 100);
     const total = baseAmount + gst;
-    const invoiceNoRaw = body.invoiceNo != null ? String(body.invoiceNo).trim() : '';
+    const invoiceNoRaw =
+      body.invoiceNo != null ? String(body.invoiceNo).trim() : "";
     const payload = {
       invoiceNo: invoiceNoRaw || (await generateInvoiceNo()),
-      client: body.client != null ? String(body.client).trim() : '',
-      type: body.type === 'Training' ? 'Training' : 'Company',
-      category: body.category === 'Expense' ? 'Expense' : 'Revenue',
+      client: body.client != null ? String(body.client).trim() : "",
+      type: body.type === "Training" ? "Training" : "Company",
+      category: body.category === "Expense" ? "Expense" : "Revenue",
       baseAmount,
       gstRate,
       gst,
       total,
-      status: ['Pending', 'Paid', 'Overdue', 'Partial'].includes(body.status) ? body.status : 'Pending',
-      paymentMethod: body.paymentMethod != null ? String(body.paymentMethod).trim() : '',
+      status: ["Pending", "Paid", "Overdue", "Partial"].includes(body.status)
+        ? body.status
+        : "Pending",
+      paymentMethod:
+        body.paymentMethod != null ? String(body.paymentMethod).trim() : "",
       invoiceDate: parseDate(body.invoiceDate),
       dueDate: parseDate(body.dueDate),
       paidDate: parseDate(body.paidDate),
-      description: body.description != null ? String(body.description).trim() : '',
+      description:
+        body.description != null ? String(body.description).trim() : "",
     };
     const doc = await Invoice.create(payload);
+    try {
+      await recordFinanceActivity(req, {
+        type: "invoice_created",
+        title: `Invoice created: ${doc.invoiceNo}`,
+        subtitle: `${doc.client || "Client"} · ₹${Number(doc.total || 0).toFixed(2)}`,
+        icon: "invoice",
+        metadata: {
+          invoiceId: doc._id,
+          invoiceNo: doc.invoiceNo,
+          category: doc.category,
+        },
+      });
+    } catch (err) {
+      console.error("Failed to log invoice finance activity:", err);
+    }
     res.status(201).json(doc);
   } catch (err) {
-    console.error('Invoice create error:', err);
-    res.status(500).json({ message: err.message || 'Failed to create invoice' });
+    console.error("Invoice create error:", err);
+    res
+      .status(500)
+      .json({ message: err.message || "Failed to create invoice" });
   }
 }
 
 async function update(req, res) {
   try {
     const doc = await Invoice.findById(req.params.id);
-    if (!doc) return res.status(404).json({ message: 'Invoice not found' });
+    if (!doc) return res.status(404).json({ message: "Invoice not found" });
     const body = req.body || {};
-    if (body.invoiceNo !== undefined) doc.invoiceNo = String(body.invoiceNo).trim();
+    if (body.invoiceNo !== undefined)
+      doc.invoiceNo = String(body.invoiceNo).trim();
     if (body.client !== undefined) doc.client = String(body.client).trim();
-    if (body.type !== undefined) doc.type = body.type === 'Training' ? 'Training' : 'Company';
-    if (body.category !== undefined) doc.category = body.category === 'Expense' ? 'Expense' : 'Revenue';
+    if (body.type !== undefined)
+      doc.type = body.type === "Training" ? "Training" : "Company";
+    if (body.category !== undefined)
+      doc.category = body.category === "Expense" ? "Expense" : "Revenue";
     const hasBaseAmount = body.baseAmount !== undefined;
     const hasGstRate = body.gstRate !== undefined;
     if (hasBaseAmount) doc.baseAmount = toNumber(body.baseAmount) ?? 0;
@@ -158,28 +195,39 @@ async function update(req, res) {
       doc.gst = Math.round((baseAmount * gstRate) / 100);
       doc.total = baseAmount + doc.gst;
     }
-    if (body.status !== undefined && ['Pending', 'Paid', 'Overdue', 'Partial'].includes(body.status)) doc.status = body.status;
-    if (body.paymentMethod !== undefined) doc.paymentMethod = String(body.paymentMethod).trim();
-    if (body.invoiceDate !== undefined) doc.invoiceDate = parseDate(body.invoiceDate);
+    if (
+      body.status !== undefined &&
+      ["Pending", "Paid", "Overdue", "Partial"].includes(body.status)
+    )
+      doc.status = body.status;
+    if (body.paymentMethod !== undefined)
+      doc.paymentMethod = String(body.paymentMethod).trim();
+    if (body.invoiceDate !== undefined)
+      doc.invoiceDate = parseDate(body.invoiceDate);
     if (body.dueDate !== undefined) doc.dueDate = parseDate(body.dueDate);
     if (body.paidDate !== undefined) doc.paidDate = parseDate(body.paidDate);
-    if (body.description !== undefined) doc.description = String(body.description).trim();
+    if (body.description !== undefined)
+      doc.description = String(body.description).trim();
     await doc.save();
     res.json(doc);
   } catch (err) {
-    console.error('Invoice update error:', err);
-    res.status(500).json({ message: err.message || 'Failed to update invoice' });
+    console.error("Invoice update error:", err);
+    res
+      .status(500)
+      .json({ message: err.message || "Failed to update invoice" });
   }
 }
 
 async function remove(req, res) {
   try {
     const doc = await Invoice.findByIdAndDelete(req.params.id);
-    if (!doc) return res.status(404).json({ message: 'Invoice not found' });
-    res.json({ message: 'Invoice deleted', id: doc._id });
+    if (!doc) return res.status(404).json({ message: "Invoice not found" });
+    res.json({ message: "Invoice deleted", id: doc._id });
   } catch (err) {
-    console.error('Invoice delete error:', err);
-    res.status(500).json({ message: err.message || 'Failed to delete invoice' });
+    console.error("Invoice delete error:", err);
+    res
+      .status(500)
+      .json({ message: err.message || "Failed to delete invoice" });
   }
 }
 
