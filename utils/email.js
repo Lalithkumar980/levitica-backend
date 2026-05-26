@@ -1,15 +1,10 @@
-const { Resend } = require('resend');
+const { sendMail } = require('./mailer');
 const fs = require('fs');
 const path = require('path');
 
 function logEmail(msg, data) {
   console.log(`[onboarding][email] ${msg}`, data != null ? data : '');
 }
-
-/**
- * Resend setup
- */
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 /**
  * Send onboarding invite (Resend)
@@ -144,12 +139,12 @@ async function sendOnboardingInvite({ to, inviteUrl, candidateName, expiresAt, c
 
   const logoAttachment = {
     filename: 'logo.png',
-    content: fs.readFileSync(logoPath).toString('base64'),
-    contentId: 'companylogo',
+    content: fs.readFileSync(logoPath),
+    cid: 'companylogo',
   };
 
   try {
-    const { data, error } = await resend.emails.send({
+    const result = await sendMail({
       from: process.env.MAIL_FROM || 'info@leviticatechnologies.com',
       to,
       subject:
@@ -160,19 +155,19 @@ async function sendOnboardingInvite({ to, inviteUrl, candidateName, expiresAt, c
       attachments: [logoAttachment],
     });
 
-    if (error) {
-      console.error("❌ RESEND ERROR:", error);
-      logEmail('resend failed', { to, provider: 'resend', error: error.message || error });
-      return { ok: false, error: error.message || 'Resend failed to send email' };
+    if (!result.ok) {
+      console.error("❌ SMTP ERROR:", result.error);
+      logEmail('smtp failed', { to, provider: 'smtp', error: result.error });
+      return { ok: false, error: result.error || 'SMTP failed to send email' };
     }
 
-    console.log("RESEND SUCCESS:", data);
-    logEmail('invite sent via resend', { to, provider: 'resend', messageId: data.id });
-    return { ok: true, messageId: data.id, provider: 'resend' };
+    console.log("SMTP SUCCESS:", result.messageId, "IMAP appended:", result.imap);
+    logEmail('invite sent via smtp/imap', { to, provider: 'smtp', messageId: result.messageId, imapAppended: result.imap });
+    return { ok: true, messageId: result.messageId, provider: 'smtp' };
   } catch (err) {
-    console.error("❌ CRITICAL RESEND ERROR:", err);
+    console.error("❌ CRITICAL SMTP ERROR:", err);
     const message = err instanceof Error ? err.message : String(err);
-    logEmail('resend exception', { to, error: message });
+    logEmail('smtp exception', { to, error: message });
     return { ok: false, error: message };
   }
 }
@@ -265,19 +260,19 @@ async function sendOfferLetterEmail({
       file.filename ||
       file.originalname ||
       `offer-letter-${index + 1}.pdf`,
-    content: file.buffer.toString('base64'),
-    type: file.mimetype || 'application/pdf',
+    content: file.buffer,
+    contentType: file.mimetype || 'application/pdf',
   }));
 
   const logoAttachment = {
     filename: 'logo.png',
-    content: fs.readFileSync(logoPath).toString('base64'),
-    contentId: 'companylogo',
+    content: fs.readFileSync(logoPath),
+    cid: 'companylogo',
   };
 
   try {
-    const { data, error } = await resend.emails.send({
-      from,
+    const result = await sendMail({
+      from: process.env.MAIL_FROMS || from,
       to,
       subject,
       text,
@@ -285,19 +280,19 @@ async function sendOfferLetterEmail({
       attachments: [logoAttachment, ...normalizedAttachments],
     });
 
-    if (error) {
-      console.error("❌ RESEND ERROR:", error);
-      logEmail('resend failed', { to, provider: 'resend', error: error.message || error });
-      return { ok: false, error: error.message || 'Resend failed to send email' };
+    if (!result.ok) {
+      console.error("❌ SMTP ERROR:", result.error);
+      logEmail('smtp failed', { to, provider: 'smtp', error: result.error });
+      return { ok: false, error: result.error || 'SMTP failed to send email' };
     }
 
-    console.log("RESEND SUCCESS:", data);
-    logEmail('offer letter sent via resend', { to, provider: 'resend', messageId: data.id });
-    return { ok: true, messageId: data.id, provider: 'resend' };
+    console.log("SMTP SUCCESS:", result.messageId, "IMAP appended:", result.imap);
+    logEmail('offer letter sent via smtp/imap', { to, provider: 'smtp', messageId: result.messageId, imapAppended: result.imap });
+    return { ok: true, messageId: result.messageId, provider: 'smtp' };
   } catch (err) {
-    console.error("❌ CRITICAL RESEND ERROR:", err);
+    console.error("❌ CRITICAL SMTP ERROR:", err);
     const message = err instanceof Error ? err.message : String(err);
-    logEmail('resend exception', { to, error: message });
+    logEmail('smtp exception', { to, error: message });
     return { ok: false, error: message };
   }
 }

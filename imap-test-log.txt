@@ -1,0 +1,26 @@
+=== TEST RUN AT 2026-05-26T02:32:45.739Z ===
+Loaded SMTP host: mail.leviticatechnologies.com
+Loaded SMTP user: info@leviticatechnologies.com
+Sending test email to info@leviticatechnologies.com...
+[mailer][smtp] ✅ Sent  to=info@leviticatechnologies.com  messageId=<9b1b9858-66da-64dc-9d5e-1264848b5752@leviticatechnologies.com>
+[mailer][imap] Listing available mailboxes on server:
+  - Path: "INBOX" (Name: "INBOX", SpecialUse: "\Inbox")
+  - Path: "INBOX.Sent" (Name: "Sent", SpecialUse: "\Sent")
+  - Path: "INBOX.Drafts" (Name: "Drafts", SpecialUse: "\Drafts")
+  - Path: "INBOX.Archive" (Name: "Archive", SpecialUse: "\Archive")
+  - Path: "INBOX.spam" (Name: "spam", SpecialUse: "\Junk")
+  - Path: "INBOX.Trash" (Name: "Trash", SpecialUse: "\Trash")
+  - Path: "INBOX.Junk" (Name: "Junk", SpecialUse: "")
+[mailer][imap] Resolved Sent folder (via SpecialUse) to path: "INBOX.Sent"
+[mailer][imap] ✅ Message appended to "INBOX.Sent"
+ERROR: Trace: { msg: [32m'Connection closed'[39m, cid: [32m'71dtqma3kuvj4zosci9c'[39m }
+    at synteticLogger.<computed> [as trace] (C:\Users\Lalith\OneDrive\Desktop\levitica-backend\backend\node_modules\imapflow\lib\imap-flow.js:3801:42)
+    at ImapFlow.close (C:\Users\Lalith\OneDrive\Desktop\levitica-backend\backend\node_modules\imapflow\lib\imap-flow.js:1979:22)
+    at TLSSocket.<anonymous> (C:\Users\Lalith\OneDrive\Desktop\levitica-backend\backend\node_modules\imapflow\lib\imap-flow.js:862:58)
+    at Object.onceWrapper (node:events:622:28)
+    at TLSSocket.emit (node:events:520:35)
+    at endReadableNT (node:internal/streams/readable:1729:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Test result: {"ok":true,"messageId":"<9b1b9858-66da-64dc-9d5e-1264848b5752@leviticatechnologies.com>","imap":true}
+✅ SMTP Mail sent successfully. Message ID: <9b1b9858-66da-64dc-9d5e-1264848b5752@leviticatechnologies.com>
+✅ IMAP Append succeeded. Check your Sent folder!
