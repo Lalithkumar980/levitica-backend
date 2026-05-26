@@ -31,7 +31,9 @@ router.post('/login', async (req, res) => {
       { expiresIn: '7d' }
     );
     const userJson = user.toJSON();
-    const profilePhotoUrl = user.profilePhoto
+    const profilePhotoUrl = user.profileImageFileId
+      ? `/api/users/${user._id.toString()}/photo`
+      : user.profilePhoto
       ? `/api/uploads/profiles/${user.profilePhoto}`
       : null;
     res.json({
