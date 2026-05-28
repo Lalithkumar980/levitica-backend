@@ -163,7 +163,18 @@ async function remove(req, res) {
 function formatDateTime(d) {
   if (!d) return '';
   const date = new Date(d);
-  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  try {
+    return date.toLocaleDateString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  } catch {
+    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  }
 }
 
 async function recentActivity(req, res) {

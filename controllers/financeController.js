@@ -6,7 +6,8 @@ const Expense = require("../models/Expense");
 function formatDateTime(date) {
   try {
     const d = date ? new Date(date) : new Date();
-    return d.toLocaleString(undefined, {
+    return d.toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
       day: "2-digit",
       month: "short",
       year: "numeric",
