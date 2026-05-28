@@ -658,6 +658,33 @@ async function updateSubmissionVerification(req, res) {
     return res.status(500).json({ message: 'Could not save verification status' });
   }
 
+  // Log verification status update for HR activity / notification feed
+  try {
+    const performedByName = req.user?.name || req.user?.fullName || 'HR Management';
+    let statusText = status;
+    if (status === 'approved') statusText = 'Approved';
+    else if (status === 'rejected') statusText = 'Rejected';
+    else if (status === 'clarification_needed') statusText = 'Clarification Needed';
+    else if (status === 'pending') statusText = 'Pending';
+
+    await logHRActivity({
+      candidateId: doc._id.toString(),
+      candidateName: doc.name || 'Candidate',
+      type: 'document_verification',
+      title: `Verification: ${statusText} for ${doc.name || 'Candidate'}`,
+      subtitle: `Updated by ${performedByName}`,
+      icon: 'shield',
+      performedBy: performedByName,
+      metadata: {
+        status,
+        notes,
+        submissionId: doc._id.toString(),
+      },
+    });
+  } catch (logErr) {
+    console.error('[onboarding] failed to log status update activity', logErr);
+  }
+
   return res.json({
     message: 'Verification status updated',
     submission: {
