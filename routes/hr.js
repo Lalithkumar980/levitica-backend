@@ -71,10 +71,12 @@ router.get('/recent-activity', async (req, res) => {
       const rolePart = safeStr(c.position) && safeStr(c.position) !== '—' ? c.position : '';
       const subtitle = [rolePart, formatDateTime(sortDate)].filter(Boolean).join(' · ');
 
-      return { type, title, subtitle, icon, sortDate, timestamp: sortDate };
+      return { id: c._id, candidateId: c._id, type, title, subtitle, icon, sortDate, timestamp: sortDate };
     });
 
     const modernActivity = logs.map(l => ({
+      id: l.candidateId || l._id,
+      candidateId: l.candidateId,
       type: l.type,
       title: l.title,
       subtitle: [l.subtitle, formatDateTime(l.createdAt)].filter(Boolean).join(' · '),
