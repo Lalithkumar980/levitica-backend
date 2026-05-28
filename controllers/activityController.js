@@ -1,4 +1,9 @@
 const Activity = require('../models/Activity');
+const Lead = require('../models/Lead');
+const Contact = require('../models/Contact');
+const Company = require('../models/Company');
+const Deal = require('../models/Deal');
+const Document = require('../models/Document');
 const { scopeQueryByRole, ensureOwnerForCreate, canEditRecord, isRep } = require('../middleware/roles');
 
 const REP_FIELD = 'rep';
@@ -201,6 +206,124 @@ async function recentActivity(req, res) {
   }
 }
 
+async function salesRepActivity(req, res) {
+  try {
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 10, 1), 50);
+    const userId = req.user._id;
+
+    const [leads, contacts, companies, deals, activities, documents] = await Promise.all([
+      Lead.find({ owner: userId }).sort({ createdAt: -1 }).limit(limit).lean(),
+      Contact.find({ owner: userId }).sort({ createdAt: -1 }).limit(limit).lean(),
+      Company.find({ owner: userId }).sort({ createdAt: -1 }).limit(limit).lean(),
+      Deal.find({ owner: userId }).sort({ createdAt: -1 }).limit(limit).lean(),
+      Activity.find({ rep: userId })
+        .populate('dealId', 'title company')
+        .populate('contactId', 'fname lname company')
+        .sort({ createdAt: -1 }).limit(limit).lean(),
+      Document.find({ uploadedBy: userId }).sort({ createdAt: -1 }).limit(limit).lean()
+    ]);
+
+    const allActivities = [];
+
+    // 1. Leads
+    leads.forEach(l => {
+      allActivities.push({
+        id: l._id,
+        type: 'lead_created',
+        title: `Lead Added: ${l.fname} ${l.lname}`,
+        subtitle: [l.company, formatDateTime(l.createdAt)].filter(Boolean).join(' · '),
+        icon: 'user-plus',
+        sortDate: l.createdAt,
+        timestamp: l.createdAt
+      });
+    });
+
+    // 2. Contacts
+    contacts.forEach(c => {
+      allActivities.push({
+        id: c._id,
+        type: 'contact',
+        title: `Contact Added: ${c.fname} ${c.lname || ''}`.trim(),
+        subtitle: [c.company, formatDateTime(c.createdAt)].filter(Boolean).join(' · '),
+        icon: 'user',
+        sortDate: c.createdAt,
+        timestamp: c.createdAt
+      });
+    });
+
+    // 3. Companies
+    companies.forEach(com => {
+      allActivities.push({
+        id: com._id,
+        type: 'company',
+        title: `Company Added: ${com.name}`,
+        subtitle: [com.industry, formatDateTime(com.createdAt)].filter(Boolean).join(' · '),
+        icon: 'briefcase',
+        sortDate: com.createdAt,
+        timestamp: com.createdAt
+      });
+    });
+
+    // 4. Deals
+    deals.forEach(d => {
+      allActivities.push({
+        id: d._id,
+        type: 'deal_created',
+        title: `Deal Created: ${d.title}`,
+        subtitle: [`Company: ${d.company}`, d.amount ? `Value: ₹${d.amount}` : '', formatDateTime(d.createdAt)].filter(Boolean).join(' · '),
+        icon: 'dollar-sign',
+        sortDate: d.createdAt,
+        timestamp: d.createdAt
+      });
+    });
+
+    // 5. Activity logs (Calls, Emails, Meetings, Note, Task, etc.)
+    activities.forEach(a => {
+      let icon = 'phone';
+      if (a.type === 'Email') icon = 'mail';
+      if (a.type === 'Meeting' || a.type === 'Demo') icon = 'calendar';
+      if (a.type === 'Note') icon = 'edit';
+      if (a.type === 'Task') icon = 'check-square';
+
+      const companyName = a.company || (a.dealId && a.dealId.company) || (a.contactId && a.contactId.company) || '';
+
+      allActivities.push({
+        id: a._id,
+        type: a.type.toLowerCase(),
+        title: `${a.type} Logged: ${a.subject}`,
+        subtitle: [companyName, formatDateTime(a.date || a.createdAt)].filter(Boolean).join(' · '),
+        icon: icon,
+        sortDate: a.date || a.createdAt,
+        timestamp: a.date || a.createdAt
+      });
+    });
+
+    // 6. Documents
+    documents.forEach(doc => {
+      allActivities.push({
+        id: doc._id,
+        type: 'document',
+        title: `Document Uploaded: ${doc.name}`,
+        subtitle: [`Type: ${doc.type}`, doc.company, formatDateTime(doc.createdAt)].filter(Boolean).join(' · '),
+        icon: 'file-text',
+        sortDate: doc.createdAt,
+        timestamp: doc.createdAt
+      });
+    });
+
+    // Sort all combined activities by date descending
+    allActivities.sort((x, y) => new Date(y.sortDate) - new Date(x.sortDate));
+
+    // Slice to the requested limit
+    const sliced = allActivities.slice(0, limit);
+
+    res.json({ activity: sliced });
+  } catch (err) {
+    console.error('Activities salesRepActivity error:', err);
+    res.status(500).json({ message: 'Failed to fetch sales rep activities' });
+  }
+}
+
 module.exports = {
   listCalls,
   listEmails,
@@ -210,4 +333,5 @@ module.exports = {
   update,
   remove,
   recentActivity,
+  salesRepActivity,
 };
