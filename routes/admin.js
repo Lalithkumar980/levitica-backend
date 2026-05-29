@@ -8,5 +8,6 @@ router.use(adminOnly);
 router.get('/users', adminController.listUsers);
 router.put('/users/:id/role', adminController.updateUserRole);
 router.get('/users/:id/stats', adminController.getUserStats);
+router.get('/recent-activity', adminController.recentActivity);
 
 module.exports = router;
