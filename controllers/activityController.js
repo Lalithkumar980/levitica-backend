@@ -5,6 +5,8 @@ const Company = require('../models/Company');
 const Deal = require('../models/Deal');
 const Document = require('../models/Document');
 const { scopeQueryByRole, ensureOwnerForCreate, canEditRecord, isRep } = require('../middleware/roles');
+const path = require('path');
+const { getDriveClient, ensureFolderPath, uploadBufferToFolder, deleteFile } = require('../services/googleDriveService');
 
 const REP_FIELD = 'rep';
 
@@ -87,11 +89,27 @@ async function create(req, res) {
     }, REP_FIELD);
 
     if (req.file) {
-      payload.recording = `/api/uploads/calls/${req.file.filename}`;
+      const drive = await getDriveClient();
+      const folderId = await ensureFolderPath(drive, ['levitica Call Recordings']);
+      const fileName = `call_${Date.now()}_${req.user._id}_${Math.random().toString(36).slice(2, 8)}${path.extname(req.file.originalname || '.mp3')}`;
+      const { fileId } = await uploadBufferToFolder({
+        drive,
+        folderId,
+        fileName,
+        buffer: req.file.buffer,
+        mimeType: req.file.mimetype,
+      });
+      payload.recordingFileId = fileId;
+      payload.recording = 'temp_placeholder';
     }
 
     if (!payload.rep) payload.rep = req.user._id;
     const doc = await Activity.create(payload);
+
+    if (payload.recordingFileId) {
+      doc.recording = `/api/v1/activities/calls/${doc._id}/audio`;
+      await doc.save();
+    }
 
     const populated = await Activity.findById(doc._id)
       .populate('rep', 'name')
@@ -131,7 +149,27 @@ async function update(req, res) {
     allowed.forEach((key) => { if (body[key] !== undefined) doc[key] = body[key]; });
     
     if (req.file) {
-      doc.recording = `/api/uploads/calls/${req.file.filename}`;
+      const drive = await getDriveClient();
+      const folderId = await ensureFolderPath(drive, ['levitica Call Recordings']);
+      
+      if (doc.recordingFileId) {
+        try {
+          await deleteFile(drive, doc.recordingFileId);
+        } catch (err) {
+          console.error('Failed to delete previous recording from Google Drive:', err);
+        }
+      }
+      
+      const fileName = `call_${Date.now()}_${req.user._id}_${Math.random().toString(36).slice(2, 8)}${path.extname(req.file.originalname || '.mp3')}`;
+      const { fileId } = await uploadBufferToFolder({
+        drive,
+        folderId,
+        fileName,
+        buffer: req.file.buffer,
+        mimeType: req.file.mimetype,
+      });
+      doc.recordingFileId = fileId;
+      doc.recording = `/api/v1/activities/calls/${doc._id}/audio`;
     }
 
     if (isRep(req)) doc.rep = req.user._id;
@@ -151,8 +189,19 @@ async function update(req, res) {
 
 async function remove(req, res) {
   try {
-    const doc = await Activity.findByIdAndDelete(req.params.id);
+    const doc = await Activity.findById(req.params.id);
     if (!doc) return res.status(404).json({ message: 'Activity not found' });
+    
+    if (doc.recordingFileId) {
+      try {
+        const drive = await getDriveClient();
+        await deleteFile(drive, doc.recordingFileId);
+      } catch (err) {
+        console.error('Failed to delete call recording from Google Drive:', err);
+      }
+    }
+    
+    await Activity.findByIdAndDelete(req.params.id);
     res.json({ message: 'Activity deleted', id: doc._id });
   } catch (err) {
     console.error('Activity delete error:', err);
@@ -459,6 +508,45 @@ async function salesManagerActivity(req, res) {
   }
 }
 
+async function streamAudio(req, res) {
+  try {
+    const activity = await Activity.findById(req.params.id).lean();
+    if (!activity) return res.status(404).json({ message: 'Activity not found' });
+    if (!canEditRecord(req, activity, REP_FIELD)) {
+      return res.status(403).json({ message: 'Access denied to this recording' });
+    }
+    
+    if (activity.recordingFileId) {
+      const drive = await getDriveClient();
+      const fileStream = await drive.files.get({
+        fileId: activity.recordingFileId,
+        alt: 'media'
+      }, { responseType: 'stream' });
+      
+      res.setHeader('Content-Type', 'audio/mpeg');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      
+      return fileStream.data
+        .on('error', (err) => {
+          console.error('Error proxying audio from Drive:', err);
+          if (!res.headersSent) res.status(500).end();
+        })
+        .pipe(res);
+    }
+    
+    if (activity.recording && activity.recording.startsWith('/api/uploads/')) {
+      return res.redirect(activity.recording);
+    }
+    
+    return res.status(404).json({ message: 'Audio recording not found' });
+  } catch (err) {
+    console.error('Stream audio error:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ message: 'Failed to stream call recording' });
+    }
+  }
+}
+
 module.exports = {
   listCalls,
   listEmails,
@@ -470,4 +558,5 @@ module.exports = {
   recentActivity,
   salesRepActivity,
   salesManagerActivity,
+  streamAudio,
 };

@@ -109,34 +109,125 @@ app.get("/api/health/db", (req, res) => {
 });
 
 /** OAuth redirect target for `npm run google:auth` — shows `code` when Google redirects here */
-app.get("/oauth2callback", (req, res) => {
+app.get("/api/v1/auth/google-url", (req, res) => {
+  try {
+    const fs = require("fs");
+    const path = require("path");
+    const logAuth = (msg) => {
+      fs.appendFileSync(path.join(__dirname, "auth_logs.txt"), `[${new Date().toISOString()}] ${msg}\n`, "utf8");
+    };
+    logAuth("Visited /api/v1/auth/google-url");
+
+    const { google } = require("googleapis");
+    const { trimEnv } = require("./services/googleDriveService");
+    const oauth2Client = new google.auth.OAuth2(
+      trimEnv(process.env.GOOGLE_CLIENT_ID),
+      trimEnv(process.env.GOOGLE_CLIENT_SECRET),
+      trimEnv(process.env.GOOGLE_REDIRECT_URI)
+    );
+    const SCOPES = ["https://www.googleapis.com/auth/drive"];
+    const authUrl = oauth2Client.generateAuthUrl({
+      access_type: "offline",
+      prompt: "consent",
+      scope: SCOPES,
+    });
+    logAuth(`Redirecting to: ${authUrl}`);
+    return res.redirect(authUrl);
+  } catch (ex) {
+    const fs = require("fs");
+    const path = require("path");
+    fs.appendFileSync(path.join(__dirname, "auth_logs.txt"), `[${new Date().toISOString()}] Error in google-url: ${ex.stack || ex.message}\n`, "utf8");
+    return res.status(500).send(`Error generating URL: ${ex.message}`);
+  }
+});
+
+/** OAuth redirect target — automatically exchanges code and updates .env file */
+app.get("/oauth2callback", async (req, res) => {
+  const fs = require("fs");
+  const path = require("path");
+  const logAuth = (msg) => {
+    fs.appendFileSync(path.join(__dirname, "auth_logs.txt"), `[${new Date().toISOString()}] ${msg}\n`, "utf8");
+  };
+
   const err = typeof req.query.error === "string" ? req.query.error : "";
   const code = typeof req.query.code === "string" ? req.query.code : "";
+  logAuth(`Callback received. Error: "${err}", Code length: ${code ? code.length : 0}`);
+
   if (err) {
+    logAuth(`Callback error: ${err}`);
     return res
       .status(400)
       .type("html")
-      .send(`<html><body><p>OAuth error: ${err}</p></body></html>`);
+      .send(`<html><body><h2>OAuth error</h2><p>${err}</p></body></html>`);
   }
   if (!code) {
+    logAuth("Callback error: No code");
     return res
       .type("html")
       .send(
-        "<html><body><p>No <code>code</code> in query. Use the URL Google redirected to.</p></body></html>"
+        "<html><body><h2>No authorization code found</h2><p>Please launch the flow from <a href='/api/v1/auth/google-url'>here</a>.</p></body></html>"
       );
   }
-  const safeCode = code
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-  return res.type("html").send(
-    `<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:640px;margin:2rem auto;">
-    <h2>Google OAuth</h2>
-    <p>Copy the <strong>authorization code</strong> below and paste it into the terminal running <code>npm run google:auth</code>:</p>
-    <pre style="background:#f4f4f4;padding:12px;word-break:break-all;">${safeCode}</pre>
-    <p>Or paste the <strong>full address bar URL</strong> into the script instead.</p>
-    </body></html>`
-  );
+  
+  try {
+    const { google } = require("googleapis");
+    const fsPath = require("path");
+    const { trimEnv } = require("./services/googleDriveService");
+    
+    const oauth2Client = new google.auth.OAuth2(
+      trimEnv(process.env.GOOGLE_CLIENT_ID),
+      trimEnv(process.env.GOOGLE_CLIENT_SECRET),
+      trimEnv(process.env.GOOGLE_REDIRECT_URI)
+    );
+    
+    logAuth("Exchanging code for tokens...");
+    const { tokens } = await oauth2Client.getToken(code);
+    logAuth(`Tokens received: ${Object.keys(tokens).join(", ")}`);
+
+    if (!tokens.refresh_token) {
+      logAuth("No refresh token returned. User must revoke permissions and try again.");
+      return res.type("html").send(
+        `<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:640px;margin:2rem auto;">
+        <h2 style="color:red;">Failed to get Refresh Token</h2>
+        <p>Google did not return a refresh token. This usually happens if you already authorized the app once. To fix this:</p>
+        <ol>
+          <li>Go to <a href="https://myaccount.google.com/permissions" target="_blank">Google Third-party apps access</a></li>
+          <li>Find your app and click **Remove Access** / **Revoke**</li>
+          <li>Go back to <a href="/api/v1/auth/google-url">Google Login URL</a> and authorize again.</li>
+        </ol>
+        </body></html>`
+      );
+    }
+
+    // Write to .env file
+    const envPath = fsPath.join(__dirname, ".env");
+    let envContent = fs.readFileSync(envPath, "utf8");
+    if (envContent.includes("GOOGLE_REFRESH_TOKEN=")) {
+      envContent = envContent.replace(
+        /GOOGLE_REFRESH_TOKEN=.*/,
+        `GOOGLE_REFRESH_TOKEN=${tokens.refresh_token}`
+      );
+    } else {
+      envContent += `\nGOOGLE_REFRESH_TOKEN=${tokens.refresh_token}`;
+    }
+    fs.writeFileSync(envPath, envContent, "utf8");
+    logAuth("Successfully wrote GOOGLE_REFRESH_TOKEN to .env");
+
+    return res.type("html").send(
+      `<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:640px;margin:2rem auto;">
+      <h2 style="color:green;">Success! Google Drive Authenticated</h2>
+      <p>The new refresh token has been successfully written to your <code>.env</code> file:</p>
+      <pre style="background:#f4f4f4;padding:12px;word-break:break-all;">GOOGLE_REFRESH_TOKEN=${tokens.refresh_token}</pre>
+      <h3 style="color:#e67e22;">CRITICAL STEP: Restart the backend server now!</h3>
+      <p>Press <code>Ctrl + C</code> in your backend command prompt / terminal, and run <code>npm start</code> again to apply the changes.</p>
+      </body></html>`
+    );
+  } catch (ex) {
+    logAuth(`Error exchanging code: ${ex.stack || ex.message}`);
+    return res.status(500).type("html").send(
+      `<!DOCTYPE html><html><body><h2>Error Exchanging Code</h2><pre style="color:red;">${ex.stack || ex.message}</pre></body></html>`
+    );
+  }
 });
 
 const { verifyToken, adminOrHRManagement } = require("./middleware/auth");

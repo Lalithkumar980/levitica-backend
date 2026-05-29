@@ -50,6 +50,10 @@ const ActivitySchema = new mongoose.Schema(
     recording: {
       type: String,
     }, // Filename or URL of call recording
+    recordingFileId: {
+      type: String,
+      default: null,
+    }, // Google Drive file ID for audio recording
     rep: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',

@@ -73,7 +73,7 @@ const callRecordingStorage = multer.diskStorage({
   },
 });
 const callRecordingUpload = multer({
-  storage: callRecordingStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
   fileFilter: (req, file, cb) => {
     const ok = /^audio\//i.test(file.mimetype) || /\.(mp3|wav|ogg|m4a)$/i.test(file.originalname || '');

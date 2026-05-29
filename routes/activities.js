@@ -5,6 +5,7 @@ const { callRecordingUpload } = require('../middleware/upload');
 const activityController = require('../controllers/activityController');
 
 router.get('/calls', activityController.listCalls);
+router.get('/calls/:id/audio', activityController.streamAudio);
 router.get('/emails', activityController.listEmails);
 router.get('/recent-activity', activityController.recentActivity);
 router.get('/sales-rep-activity', activityController.salesRepActivity);
