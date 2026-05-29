@@ -82,11 +82,17 @@ const callRecordingUpload = multer({
   },
 }).single('recording');
 
+const documentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 30 * 1024 * 1024 }, // 30 MB limit
+}).single('file');
+
 module.exports = {
   csvUpload,
   uploadLeadsCsv,
   profilePhotoUpload,
   resumeUpload,
   callRecordingUpload,
+  documentUpload,
 };
 

@@ -50,6 +50,9 @@ const DocumentSchema = new mongoose.Schema(
     notes: {
       type: String,
     },
+    driveFileId: {
+      type: String,
+    },
   },
   { timestamps: true }
 );

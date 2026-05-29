@@ -1,480 +1,550 @@
 const express = require('express');
-const { getDriveClient, ensureFolderPath, uploadBufferToFolder, deleteFile } = require('../services/googleDriveService');
-const fs = require('fs');
-const path = require('path');
 const router = express.Router();
+const path = require('path');
 const User = require('../models/User');
-const { authenticate, requireAdmin } = require('../middleware/auth');
-const { decrypt } = require('../utils/encrypt');
-const { profilePhotoUpload } = require('../middleware/upload');
+const { verifyToken, adminOnly } = require('../middleware/auth');
 const { validateRoleAssignment } = require('../utils/roleValidator');
+const { profilePhotoUpload } = require('../middleware/upload');
+const { decrypt } = require('../utils/encrypt');
+const {
+  getDriveClient,
+  ensureFolderPath,
+  uploadBufferToFolder,
+  deleteFile,
+  sanitizeSegment
+} = require('../services/googleDriveService');
 
-const ROLE_DEFAULTS = {
-  Admin: { viewAll: true, delete: true, export: true, admin: true, bulkImport: true, viewReports: true, modules: ['/dashboard', '/leads', '/contacts', '/companies', '/deals -6'] },
-  'HR Management': { viewAll: true, delete: false, export: true, admin: false, bulkImport: true, viewReports: true, modules: ['/dashboard', '/candidates'] },
-  'Sales Manager': { viewAll: true, delete: false, export: true, admin: false, bulkImport: true, viewReports: true, modules: ['/dashboard', '/leads', '/contacts', '/companies', '/deals -7'] },
-  'Finance Management': { viewAll: true, delete: false, export: true, admin: false, bulkImport: false, viewReports: true, modules: ['/finance', '/invoices', '/expenses', '/payments'] },
-  'Sales Rep': { viewAll: false, delete: false, export: true, admin: false, bulkImport: false, viewReports: true, modules: ['/dashboard', '/leads', '/contacts', '/companies', '/deals -4'] },
-};
+/** Helper function to format user for frontend expectations */
+function formatUserForFrontend(userDoc, requesterIsAdmin = false) {
+  const u = userDoc.toJSON ? userDoc.toJSON() : userDoc;
+  const idStr = u._id ? u._id.toString() : '';
 
-const ALL_ROLES = ['Admin', 'HR Management', 'Sales Manager', 'Finance Management', 'Sales Rep'];
-const ROLE_CLASS_MAP = {
-  Admin: 'bg-blue-100 text-blue-700',
-  'HR Management': 'bg-violet-100 text-violet-700',
-  'Sales Manager': 'bg-emerald-100 text-emerald-700',
-  'Finance Management': 'bg-sky-100 text-sky-700',
-  'Sales Rep': 'bg-amber-100 text-amber-700',
-};
+  // Resolve profile photo URL
+  let profilePhotoUrl = null;
+  if (u.profileImageFileId) {
+    profilePhotoUrl = `/api/users/${idStr}/photo`;
+  } else if (u.profilePhoto) {
+    profilePhotoUrl = `/api/uploads/profiles/${u.profilePhoto}`;
+  }
 
-function toProfileJson(user) {
-  const obj = user.toJSON ? user.toJSON() : { ...user, id: (user._id || user.id).toString() };
-  // Always return a proxy URL so the frontend fetches through our authenticated backend.
-  // This avoids CORS, 429, and 403 issues with Google Drive CDN links.
-  // Append a timestamp so the browser fetches fresh after every upload.
-  const userId = (user._id || user.id).toString();
-  const ts = user.updatedAt ? new Date(user.updatedAt).getTime() : Date.now();
-  obj.profilePhotoUrl = user.profileImageFileId
-    ? `/api/users/${userId}/photo?t=${ts}`
-    : user.profilePhoto
-    ? `/api/uploads/profiles/${user.profilePhoto}`
-    : null;
-  obj.profileImage = user.profileImage || null;
-  obj.profileImageFileId = user.profileImageFileId || null;
+  // Resolve company logo URL
+  let companyLogoUrl = null;
+  if (u.companyLogoFileId) {
+    companyLogoUrl = `/api/users/${idStr}/company-logo`;
+  } else if (u.companyLogo) {
+    companyLogoUrl = u.companyLogo;
+  }
 
-  // Add company logo and brief text fields
-  obj.companyLogo = user.companyLogo || null;
-  obj.companyLogoFileId = user.companyLogoFileId || null;
-  obj.companyLogoUrl = user.companyLogoFileId
-    ? `/api/users/${userId}/company-logo?t=${ts}`
-    : null;
-  obj.companyBriefText = user.companyBriefText || '';
-  return obj;
+  // Map role badge class
+  let roleClass = "bg-gray-100 text-gray-700";
+  if (u.role === 'Admin') roleClass = "bg-blue-100 text-blue-700";
+  else if (u.role === 'HR Management') roleClass = "bg-violet-100 text-violet-700";
+  else if (u.role === 'Sales Manager') roleClass = "bg-emerald-100 text-emerald-700";
+  else if (u.role === 'Finance Management') roleClass = "bg-sky-100 text-sky-700";
+  else if (u.role === 'Sales Rep') roleClass = "bg-amber-100 text-amber-700";
+
+  // Calculate initials if virtual is not resolved
+  let initials = u.initials;
+  if (!initials && u.name) {
+    const parts = u.name.split(' ').filter(Boolean);
+    if (parts.length === 1) initials = parts[0].substring(0, 2).toUpperCase();
+    else if (parts.length > 1) {
+      initials = (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+  }
+
+  const formatted = {
+    id: idStr,
+    _id: idStr,
+    name: u.name,
+    email: u.email,
+    role: u.role,
+    department: u.department || 'Sales',
+    dept: u.department || 'Sales',
+    modules: u.modules || [],
+    viewAll: !!u.viewAll,
+    delete: !!u.delete,
+    export: !!u.export,
+    admin: !!u.admin,
+    bulkImport: !!u.bulkImport,
+    viewReports: !!u.viewReports,
+    initials: initials || '—',
+    roleClass,
+    profilePhoto: u.profilePhoto,
+    profileImageFileId: u.profileImageFileId,
+    profileImage: profilePhotoUrl,
+    profilePhotoUrl,
+    companyLogo: u.companyLogo,
+    companyLogoFileId: u.companyLogoFileId,
+    companyLogoUrl,
+    phone: u.phone,
+    city: u.city,
+    address: u.address,
+    company: u.company,
+    dob: u.dob,
+    experience: u.experience,
+    companyAssets: u.companyAssets,
+    skills: u.skills,
+    hobbies: u.hobbies,
+    bio: u.bio
+  };
+
+  // Only expose plain text password to admins
+  if (requesterIsAdmin && u.passwordEncrypted) {
+    formatted.passwordDisplay = decrypt(u.passwordEncrypted);
+  }
+
+  return formatted;
 }
 
-// Deprecated: local file removal no longer needed as photos are stored on Google Drive.
-function removeProfilePhotoFile(filename) {
-  // No operation - retained for backward compatibility
-}
-
-/** GET /api/users/me — current user profile (no password); credentials visible read-only */
-router.get('/me', authenticate, async (req, res) => {
+/** GET /api/users - List all users (Admin only) */
+router.get('/', verifyToken, adminOnly, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select('+passwordEncrypted').lean();
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    const id = user._id.toString();
-    const initials = (user.name || '').trim().split(/\s+/);
-    const initialsStr = initials.length >= 2
-      ? (initials[0][0] + initials[initials.length - 1][0]).toUpperCase()
-      : (initials[0] || '').slice(0, 2).toUpperCase() || '—';
-    let passwordDisplay = '';
-    try {
-      if (user.passwordEncrypted) passwordDisplay = decrypt(user.passwordEncrypted) || '';
-    } catch (e) {
-      // ignore decrypt errors (e.g. legacy data)
-    }
-    // Use backend proxy URL to avoid CORS/403/429 issues with direct Google Drive links
-    const profilePhotoUrl = user.profileImageFileId
-      ? `/api/users/${id}/photo`
-      : user.profilePhoto
-      ? `/api/uploads/profiles/${user.profilePhoto}`
-      : null;
-    res.json({
-      profilePhotoUrl,
-      profileImage: user.profileImage || null,
-      profileImageFileId: user.profileImageFileId || null,
-      id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      department: user.department,
-      initials: initialsStr,
-      passwordDisplay,
-      phone: user.phone || '',
-      city: user.city || '',
-      address: user.address || '',
-      company: user.company || '',
-      experience: user.experience || '',
-      skills: user.skills || '',
-      hobbies: user.hobbies || '',
-      bio: user.bio || '',
-      dob: user.dob ? new Date(user.dob).toISOString().slice(0, 10) : '',
-      companyAssets: user.companyAssets || '',
-      companyLogo: user.companyLogo || null,
-      companyLogoFileId: user.companyLogoFileId || null,
-      companyLogoUrl: user.companyLogoFileId ? `/api/users/${id}/company-logo` : null,
-      companyBriefText: user.companyBriefText || ''
-    });
-  } catch (err) {
-    console.error('Get profile error:', err);
-    res.status(500).json({ message: 'Failed to get profile' });
-  }
-});
-
-/** GET /api/users/:id/photo — proxy profile photo from Google Drive */
-router.get('/:id/photo', async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id).lean();
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    
-    // Proxy the image stream from Google Drive
-    if (user.profileImageFileId) {
-      const drive = await getDriveClient();
-      const fileStream = await drive.files.get({
-        fileId: user.profileImageFileId,
-        alt: 'media'
-      }, { responseType: 'stream' });
-      
-      res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 1 day
-      return fileStream.data
-        .on('error', (err) => {
-          console.error('Error proxying image from Drive:', err);
-          if (!res.headersSent) res.status(500).end();
-        })
-        .pipe(res);
-    }
-    
-    // Fallback for old local files
-    if (user.profilePhoto) {
-      return res.redirect(`/api/uploads/profiles/${user.profilePhoto}`);
-    }
-    return res.status(404).json({ message: 'Photo not found' });
-  } catch (err) {
-    console.error('Get profile photo error:', err);
-    if (!res.headersSent) {
-      res.status(500).json({ message: 'Failed to get profile photo' });
-    }
-  }
-});
-
-/** GET /api/users/:id/company-logo — proxy company logo from Google Drive */
-router.get('/:id/company-logo', async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id).lean();
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    
-    if (user.companyLogoFileId) {
-      const drive = await getDriveClient();
-      const fileStream = await drive.files.get({
-        fileId: user.companyLogoFileId,
-        alt: 'media'
-      }, { responseType: 'stream' });
-      
-      res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 1 day
-      return fileStream.data
-        .on('error', (err) => {
-          console.error('Error proxying company logo from Drive:', err);
-          if (!res.headersSent) res.status(500).end();
-        })
-        .pipe(res);
-    }
-    return res.status(404).json({ message: 'Logo not found' });
-  } catch (err) {
-    console.error('Get company logo error:', err);
-    if (!res.headersSent) {
-      res.status(500).json({ message: 'Failed to get company logo' });
-    }
-  }
-});
-
-/** PUT /api/users/me — update own profile (no credentials) */
-const ME_EDIT_FIELDS = ['name', 'phone', 'city', 'address', 'company', 'experience', 'skills', 'hobbies', 'bio', 'companyAssets', 'dob'];
-router.put('/me', authenticate, async (req, res) => {
-  try {
-    const user = await User.findById(req.user._id);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    const body = req.body || {};
-    for (const key of ME_EDIT_FIELDS) {
-      if (body[key] != null) {
-        if (key === 'dob') {
-          const raw = String(body.dob).trim();
-          if (!raw) {
-            user.dob = null;
-          } else {
-            const d = new Date(raw);
-            if (Number.isNaN(d.getTime())) {
-              return res.status(400).json({ message: 'Invalid date of birth' });
-            }
-            user.dob = d;
-          }
-        } else {
-          const val = String(body[key]).trim();
-          user[key] = (key === 'name' && !val) ? (user.name || '') : val;
-        }
-      }
-    }
-    await user.save();
-    const out = toProfileJson(user);
-    out.phone = user.phone || '';
-    out.city = user.city || '';
-    out.address = user.address || '';
-    out.company = user.company || '';
-    out.experience = user.experience || '';
-    out.skills = user.skills || '';
-    out.hobbies = user.hobbies || '';
-    out.bio = user.bio || '';
-    out.companyAssets = user.companyAssets || '';
-    out.dob = user.dob ? new Date(user.dob).toISOString().slice(0, 10) : '';
-    res.json(out);
-  } catch (err) {
-    console.error('Update profile error:', err);
-    res.status(500).json({ message: 'Failed to update profile' });
-  }
-});
-
-/** POST /api/users/me/photo — upload profile photo (multipart form, field: photo) */
-router.post('/me/photo', authenticate, (req, res, next) => {
-  profilePhotoUpload(req, res, async (err) => {
-    if (err) {
-      return res.status(400).json({ message: err.message || 'Invalid file' });
-    }
-    try {
-      const user = await User.findById(req.user._id);
-      if (!user) return res.status(404).json({ message: 'User not found' });
-      if (!req.file || !req.file.buffer) {
-        return res.status(400).json({ message: 'No photo file received' });
-      }
-      const drive = await getDriveClient();
-      const folderId = await ensureFolderPath(drive, ['levitca Profile Images']);
-      if (user.profileImageFileId) {
-        await deleteFile(drive, user.profileImageFileId);
-      }
-      const fileName = `${Date.now()}_${req.user._id}.${req.file.mimetype.split('/')[1]}`;
-      const { fileId, fileUrl } = await uploadBufferToFolder({
-        drive,
-        folderId,
-        fileName,
-        buffer: req.file.buffer,
-        mimeType: req.file.mimetype,
-      });
-      user.profileImage = fileUrl;
-      user.profileImageFileId = fileId;
-      await user.save();
-      res.json(toProfileJson(user));
-    } catch (innerErr) {
-      console.error('Upload profile image error:', innerErr);
-      res.status(500).json({ message: 'Failed to upload profile image' });
-    }
-  });
-});
-
-
-  
-
-/** DELETE /api/users/me/photo — remove profile photo */
-router.delete('/me/photo', authenticate, async (req, res) => {
-  try {
-    const user = await User.findById(req.user._id);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    const previousFileId = user.profileImageFileId;
-    user.profileImage = null;
-    user.profileImageFileId = null;
-    user.profilePhoto = null;
-    await user.save();
-    if (previousFileId) {
-      const drive = await getDriveClient();
-      await deleteFile(drive, previousFileId);
-    }
-    res.json(toProfileJson(user));
-  } catch (err) {
-    console.error('Remove profile photo error:', err);
-    res.status(500).json({ message: 'Failed to remove profile photo' });
-  }
-});
-
-/** POST /api/users/me/company-logo — upload company logo (admin only) */
-router.post('/me/company-logo', authenticate, requireAdmin, (req, res, next) => {
-  profilePhotoUpload(req, res, async (err) => {
-    if (err) {
-      return res.status(400).json({ message: err.message || 'Invalid file' });
-    }
-    try {
-      const user = await User.findById(req.user._id);
-      if (!user) return res.status(404).json({ message: 'User not found' });
-      if (!req.file || !req.file.buffer) {
-        return res.status(400).json({ message: 'No logo file received' });
-      }
-      const drive = await getDriveClient();
-      const folderId = await ensureFolderPath(drive, ['levitica Company Logos']);
-      if (user.companyLogoFileId) {
-        await deleteFile(drive, user.companyLogoFileId);
-      }
-      const fileName = `logo_${Date.now()}_${req.user._id}.${req.file.mimetype.split('/')[1]}`;
-      const { fileId, fileUrl } = await uploadBufferToFolder({
-        drive,
-        folderId,
-        fileName,
-        buffer: req.file.buffer,
-        mimeType: req.file.mimetype,
-      });
-      user.companyLogo = fileUrl;
-      user.companyLogoFileId = fileId;
-      await user.save();
-      res.json(toProfileJson(user));
-    } catch (innerErr) {
-      console.error('Upload company logo error:', innerErr);
-      res.status(500).json({ message: 'Failed to upload company logo' });
-    }
-  });
-});
-
-/** DELETE /api/users/me/company-logo — remove company logo (admin only) */
-router.delete('/me/company-logo', authenticate, requireAdmin, async (req, res) => {
-  try {
-    const user = await User.findById(req.user._id);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    const previousFileId = user.companyLogoFileId;
-    user.companyLogo = null;
-    user.companyLogoFileId = null;
-    await user.save();
-    if (previousFileId) {
-      const drive = await getDriveClient();
-      await deleteFile(drive, previousFileId);
-    }
-    res.json(toProfileJson(user));
-  } catch (err) {
-    console.error('Remove company logo error:', err);
-    res.status(500).json({ message: 'Failed to remove company logo' });
-  }
-});
-
-/** GET /api/users — list all users (admin only); includes decrypted password for admin view */
-router.get('/', authenticate, requireAdmin, async (req, res) => {
-  try {
-    const list = await User.find().sort({ createdAt: -1 }).select('+passwordEncrypted').lean();
-    const withExtra = list.map((u) => {
-      const obj = { ...u, id: u._id.toString(), dept: u.department };
-      const initials = (u.name || '').trim().split(/\s+/);
-      obj.initials = initials.length >= 2
-        ? (initials[0][0] + initials[initials.length - 1][0]).toUpperCase()
-        : (initials[0] || '').slice(0, 2).toUpperCase() || '—';
-      obj.roleClass = ROLE_CLASS_MAP[u.role] || 'bg-gray-100 text-gray-700';
-      delete obj.password;
-      obj.passwordDisplay = u.passwordEncrypted ? decrypt(u.passwordEncrypted) : '';
-      delete obj.passwordEncrypted;
-      return obj;
-    });
-    res.json(withExtra);
+    const users = await User.find().sort({ createdAt: -1 });
+    const formatted = users.map((u) => formatUserForFrontend(u, true));
+    res.json(formatted);
   } catch (err) {
     console.error('List users error:', err);
     res.status(500).json({ message: 'Failed to list users' });
   }
 });
 
-/** POST /api/users — create user (admin only). Body: fullName, email, role, department, password */
-router.post('/', authenticate, requireAdmin, async (req, res) => {
+/** GET /api/users/me - Get logged-in user profile */
+router.get('/me', verifyToken, async (req, res) => {
   try {
-    const { fullName, email, role, department, password } = req.body || {};
-    if (!fullName || !email) {
-      return res.status(400).json({ message: 'Full name and email are required' });
-    }
-    if (!password || String(password).trim().length < 6) {
-      return res.status(400).json({ message: 'Password is required (min 6 characters)' });
-    }
-    const r = (role && ALL_ROLES.includes(role)) ? role : 'Sales Rep';
-    const defaults = ROLE_DEFAULTS[r] || ROLE_DEFAULTS['Sales Rep'];
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json(formatUserForFrontend(user, user.role === 'Admin'));
+  } catch (err) {
+    console.error('Get profile error:', err);
+    res.status(500).json({ message: 'Failed to load profile' });
+  }
+});
 
-    // Validate that restricted roles (Admin, HR Management, Sales Manager) can only have one user
-    const validation = await validateRoleAssignment(r);
+/** POST /api/users - Create a new user (Admin only) */
+router.post('/', verifyToken, adminOnly, async (req, res) => {
+  try {
+    const { fullName, email, password, role, department } = req.body || {};
+    if (!fullName || !email || !password || !role) {
+      return res.status(400).json({ message: 'Full name, email, password and role are required' });
+    }
+
+    const emailNorm = String(email).trim().toLowerCase();
+    const existing = await User.findOne({ email: emailNorm });
+    if (existing) {
+      return res.status(400).json({ message: 'A user with this email already exists' });
+    }
+
+    // Enforce role assignment count limit restrictions
+    const validation = await validateRoleAssignment(role);
     if (!validation.allowed) {
       return res.status(400).json({ message: validation.error });
     }
 
-    const existing = await User.findOne({ email: String(email).trim().toLowerCase() });
-    if (existing) {
-      return res.status(400).json({ message: 'A user with this email already exists' });
+    // Set default permissions and modules based on role
+    let viewAll = false;
+    let del = false;
+    let exp = false;
+    let adminFlag = false;
+    let bulkImport = false;
+    let viewReports = true;
+    let modules = [];
+
+    if (role === 'Admin') {
+      viewAll = true;
+      del = true;
+      exp = true;
+      adminFlag = true;
+      bulkImport = true;
+      viewReports = true;
+      modules = ['/dashboard', '/leads', '/contacts', '/companies', '/deals', '/activity', '/call-tracking', '/email-log', '/documents', '/bulk-upload', '/reports', '/settings'];
+    } else if (role === 'HR Management') {
+      viewAll = true;
+      viewReports = true;
+      modules = ['/dashboard', '/hr/intake', '/hr/pipeline', '/hr/candidates', '/hr/onboarding-submissions', '/hr/offer-letter-ready', '/hr/training-fees'];
+    } else if (role === 'Sales Manager') {
+      viewAll = true;
+      exp = true;
+      bulkImport = true;
+      viewReports = true;
+      modules = ['/dashboard', '/leads', '/contacts', '/companies', '/deals', '/activity', '/call-tracking', '/email-log', '/documents', '/bulk-upload', '/reports'];
+    } else if (role === 'Finance Management') {
+      viewAll = true;
+      exp = true;
+      viewReports = true;
+      modules = ['/dashboard', '/finance/invoices', '/finance/expenses', '/finance/payments', '/finance/pl-report'];
+    } else if (role === 'Sales Rep') {
+      viewReports = true;
+      modules = ['/dashboard', '/leads', '/contacts', '/companies', '/deals', '/activity', '/call-tracking', '/email-log', '/documents'];
     }
-    const user = await User.create({
-      name: String(fullName).trim(),
-      email: String(email).trim().toLowerCase(),
-      password: String(password).trim(),
-      role: r,
+
+    const user = new User({
+      name: fullName.trim(),
+      email: emailNorm,
+      password: password.trim(),
+      role,
       department: department || 'Sales',
-      ...defaults,
+      viewAll,
+      delete: del,
+      export: exp,
+      admin: adminFlag,
+      bulkImport,
+      viewReports,
+      modules
     });
-    const sent = user.toJSON();
-    sent.passwordDisplay = user.passwordEncrypted ? decrypt(user.passwordEncrypted) : '';
-    res.status(201).json(sent);
-  } catch (err) {
-    if (err.code === 11000) return res.status(400).json({ message: 'A user with this email already exists' });
-    console.error('Create user error:', err);
-    res.status(500).json({ message: 'Failed to create user' });
-  }
-});
 
-/** PUT /api/users/:id — update user (admin only). Body: name, email, role, department, password (optional) */
-router.put('/:id', authenticate, requireAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, email, role, department, password } = req.body || {};
-    const user = await User.findById(id);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    if (name != null) user.name = String(name).trim();
-    if (email != null) user.email = String(email).trim().toLowerCase();
-
-    // If role is being changed, validate role assignment rules
-    let newRole = user.role;
-    if (role && ALL_ROLES.includes(role)) {
-      if (role !== user.role) {
-        // Role is being changed, validate that restricted roles can only have one user
-        const validation = await validateRoleAssignment(role, id);
-        if (!validation.allowed) {
-          return res.status(400).json({ message: validation.error });
-        }
-        newRole = role;
-      }
-      user.role = newRole;
-    }
-
-    if (department != null) user.department = String(department).trim();
-    if (password != null && String(password).trim()) {
-      user.password = String(password).trim();
-      user.markModified('password');
-    }
-    const defaults = ROLE_DEFAULTS[user.role] || ROLE_DEFAULTS['Sales Rep'];
-    user.viewAll = defaults.viewAll;
-    user.delete = defaults.delete;
-    user.export = defaults.export;
-    user.admin = defaults.admin;
-    user.bulkImport = defaults.bulkImport;
-    user.viewReports = defaults.viewReports;
-    user.modules = defaults.modules;
     await user.save();
-    const sent = user.toJSON();
-    sent.passwordDisplay = user.passwordEncrypted ? decrypt(user.passwordEncrypted) : '';
-    res.json(sent);
+    res.status(201).json(formatUserForFrontend(user, true));
   } catch (err) {
-    if (err.code === 11000) return res.status(400).json({ message: 'A user with this email already exists' });
-    console.error('Update user error:', err);
-    res.status(500).json({ message: 'Failed to update user' });
+    console.error('Create user error:', err);
+    res.status(500).json({ message: err.message || 'Failed to create user' });
   }
 });
 
-/** DELETE /api/users/:id — delete user (admin only) */
-router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
+/** PUT /api/users/me - Update logged-in user profile */
+router.put('/me', verifyToken, async (req, res) => {
   try {
-    const { id } = req.params;
-    // Don't allow deletion of the user themselves
-    if (id === req.user._id.toString()) {
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const fields = [
+      'name', 'phone', 'city', 'address', 'company', 'dob',
+      'experience', 'companyAssets', 'skills', 'hobbies', 'bio'
+    ];
+
+    fields.forEach((f) => {
+      if (req.body[f] !== undefined) {
+        user[f] = req.body[f];
+      }
+    });
+
+    await user.save();
+    res.json(formatUserForFrontend(user, user.role === 'Admin'));
+  } catch (err) {
+    console.error('Update profile error:', err);
+    res.status(500).json({ message: 'Failed to update profile' });
+  }
+});
+
+/** PUT /api/users/:id - Update user details (Admin only) */
+router.put('/:id', verifyToken, adminOnly, async (req, res) => {
+  try {
+    const { name, email, role, department, password } = req.body || {};
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    if (email) {
+      const emailNorm = String(email).trim().toLowerCase();
+      if (emailNorm !== user.email) {
+        const existing = await User.findOne({ email: emailNorm });
+        if (existing) return res.status(400).json({ message: 'Email already in use' });
+        user.email = emailNorm;
+      }
+    }
+
+    if (role && role !== user.role) {
+      const validation = await validateRoleAssignment(role, user._id);
+      if (!validation.allowed) {
+        return res.status(400).json({ message: validation.error });
+      }
+      user.role = role;
+
+      // Update default permissions and modules on role change
+      let viewAll = false;
+      let del = false;
+      let exp = false;
+      let adminFlag = false;
+      let bulkImport = false;
+      let viewReports = true;
+      let modules = [];
+
+      if (role === 'Admin') {
+        viewAll = true;
+        del = true;
+        exp = true;
+        adminFlag = true;
+        bulkImport = true;
+        viewReports = true;
+        modules = ['/dashboard', '/leads', '/contacts', '/companies', '/deals', '/activity', '/call-tracking', '/email-log', '/documents', '/bulk-upload', '/reports', '/settings'];
+      } else if (role === 'HR Management') {
+        viewAll = true;
+        viewReports = true;
+        modules = ['/dashboard', '/hr/intake', '/hr/pipeline', '/hr/candidates', '/hr/onboarding-submissions', '/hr/offer-letter-ready', '/hr/training-fees'];
+      } else if (role === 'Sales Manager') {
+        viewAll = true;
+        exp = true;
+        bulkImport = true;
+        viewReports = true;
+        modules = ['/dashboard', '/leads', '/contacts', '/companies', '/deals', '/activity', '/call-tracking', '/email-log', '/documents', '/bulk-upload', '/reports'];
+      } else if (role === 'Finance Management') {
+        viewAll = true;
+        exp = true;
+        viewReports = true;
+        modules = ['/dashboard', '/finance/invoices', '/finance/expenses', '/finance/payments', '/finance/pl-report'];
+      } else if (role === 'Sales Rep') {
+        viewReports = true;
+        modules = ['/dashboard', '/leads', '/contacts', '/companies', '/deals', '/activity', '/call-tracking', '/email-log', '/documents'];
+      }
+
+      user.viewAll = viewAll;
+      user.delete = del;
+      user.export = exp;
+      user.admin = adminFlag;
+      user.bulkImport = bulkImport;
+      user.viewReports = viewReports;
+      user.modules = modules;
+    }
+
+    if (name) user.name = name.trim();
+    if (department) user.department = department;
+    if (password && password.trim()) {
+      user.password = password.trim();
+    }
+
+    await user.save();
+    res.json(formatUserForFrontend(user, true));
+  } catch (err) {
+    console.error('Update user error:', err);
+    res.status(500).json({ message: err.message || 'Failed to update user' });
+  }
+});
+
+/** DELETE /api/users/:id - Delete a user (Admin only) */
+router.delete('/:id', verifyToken, adminOnly, async (req, res) => {
+  try {
+    if (String(req.user._id) === String(req.params.id)) {
       return res.status(400).json({ message: 'You cannot delete your own account' });
     }
-    const user = await User.findById(id);
+    const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ message: 'User not found' });
-    
-    // If the user has a profile image in Google Drive, delete it
+
+    // Cleanup profile photo from Google Drive
     if (user.profileImageFileId) {
       try {
         const drive = await getDriveClient();
         await deleteFile(drive, user.profileImageFileId);
-      } catch (err) {
-        console.error('Error deleting profile image from Google Drive:', err);
+      } catch (driveErr) {
+        console.warn('Failed to delete profile photo from Google Drive:', driveErr.message);
       }
     }
-    
-    await User.findByIdAndDelete(id);
+
+    // Cleanup company logo from Google Drive
+    if (user.companyLogoFileId) {
+      try {
+        const drive = await getDriveClient();
+        await deleteFile(drive, user.companyLogoFileId);
+      } catch (driveErr) {
+        console.warn('Failed to delete company logo from Google Drive:', driveErr.message);
+      }
+    }
+
+    await User.findByIdAndDelete(req.params.id);
     res.json({ message: 'User deleted successfully' });
   } catch (err) {
     console.error('Delete user error:', err);
     res.status(500).json({ message: 'Failed to delete user' });
+  }
+});
+
+/** POST /api/users/me/photo - Upload profile photo to Google Drive */
+router.post('/me/photo', verifyToken, profilePhotoUpload, async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No photo file provided' });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const drive = await getDriveClient();
+
+    // Remove old photo if present
+    if (user.profileImageFileId) {
+      try {
+        await deleteFile(drive, user.profileImageFileId);
+      } catch (driveErr) {
+        console.warn('Failed to delete old profile photo:', driveErr.message);
+      }
+    }
+
+    // Upload to Drive
+    const folderId = await ensureFolderPath(drive, ['levitica Profile Photos']);
+    const ext = path.extname(req.file.originalname) || '.png';
+    const fileName = sanitizeSegment(`${user.name}-profile-${Date.now()}${ext}`);
+
+    const uploadRes = await uploadBufferToFolder({
+      drive,
+      folderId,
+      fileName,
+      buffer: req.file.buffer,
+      mimeType: req.file.mimetype
+    });
+
+    user.profileImageFileId = uploadRes.fileId;
+    user.profilePhoto = fileName;
+    user.profileImage = uploadRes.fileUrl;
+
+    await user.save();
+    res.json(formatUserForFrontend(user, user.role === 'Admin'));
+  } catch (err) {
+    console.error('Upload profile photo error:', err);
+    res.status(500).json({ message: 'Failed to upload profile photo' });
+  }
+});
+
+/** DELETE /api/users/me/photo - Remove profile photo */
+router.delete('/me/photo', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    if (user.profileImageFileId) {
+      try {
+        const drive = await getDriveClient();
+        await deleteFile(drive, user.profileImageFileId);
+      } catch (driveErr) {
+        console.warn('Failed to delete profile photo from Drive:', driveErr.message);
+      }
+    }
+
+    user.profileImageFileId = undefined;
+    user.profilePhoto = undefined;
+    user.profileImage = undefined;
+
+    await user.save();
+    res.json(formatUserForFrontend(user, user.role === 'Admin'));
+  } catch (err) {
+    console.error('Remove profile photo error:', err);
+    res.status(500).json({ message: 'Failed to remove profile photo' });
+  }
+});
+
+/** POST /api/users/me/company-logo - Upload company logo (Admin only) */
+router.post('/me/company-logo', verifyToken, adminOnly, profilePhotoUpload, async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No logo file provided' });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const drive = await getDriveClient();
+
+    // Remove old logo if present
+    if (user.companyLogoFileId) {
+      try {
+        await deleteFile(drive, user.companyLogoFileId);
+      } catch (driveErr) {
+        console.warn('Failed to delete old company logo:', driveErr.message);
+      }
+    }
+
+    // Upload to Drive
+    const folderId = await ensureFolderPath(drive, ['levitica Branding']);
+    const ext = path.extname(req.file.originalname) || '.png';
+    const fileName = sanitizeSegment(`company-logo-${Date.now()}${ext}`);
+
+    const uploadRes = await uploadBufferToFolder({
+      drive,
+      folderId,
+      fileName,
+      buffer: req.file.buffer,
+      mimeType: req.file.mimetype
+    });
+
+    user.companyLogoFileId = uploadRes.fileId;
+    user.companyLogo = uploadRes.fileUrl;
+
+    await user.save();
+    res.json(formatUserForFrontend(user, true));
+  } catch (err) {
+    console.error('Upload company logo error:', err);
+    res.status(500).json({ message: 'Failed to upload company logo' });
+  }
+});
+
+/** DELETE /api/users/me/company-logo - Remove company logo (Admin only) */
+router.delete('/me/company-logo', verifyToken, adminOnly, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    if (user.companyLogoFileId) {
+      try {
+        const drive = await getDriveClient();
+        await deleteFile(drive, user.companyLogoFileId);
+      } catch (driveErr) {
+        console.warn('Failed to delete company logo from Drive:', driveErr.message);
+      }
+    }
+
+    user.companyLogoFileId = undefined;
+    user.companyLogo = undefined;
+
+    await user.save();
+    res.json(formatUserForFrontend(user, true));
+  } catch (err) {
+    console.error('Remove company logo error:', err);
+    res.status(500).json({ message: 'Failed to remove company logo' });
+  }
+});
+
+/** GET /api/users/:id/photo - Serve profile photo via Google Drive streaming proxy */
+router.get('/:id/photo', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user || !user.profileImageFileId) {
+      return res.status(404).send('Photo not found');
+    }
+
+    const drive = await getDriveClient();
+    const meta = await drive.files.get({
+      fileId: user.profileImageFileId,
+      fields: 'mimeType'
+    });
+
+    const mimeType = meta.data.mimeType || 'image/png';
+    res.setHeader('Content-Type', mimeType);
+
+    const driveRes = await drive.files.get(
+      { fileId: user.profileImageFileId, alt: 'media' },
+      { responseType: 'stream' }
+    );
+
+    driveRes.data.pipe(res);
+  } catch (err) {
+    console.error('Stream profile photo error:', err.message);
+    res.status(404).send('Photo not found');
+  }
+});
+
+/** GET /api/users/:id/company-logo - Serve company logo via Google Drive streaming proxy */
+router.get('/:id/company-logo', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user || !user.companyLogoFileId) {
+      return res.status(404).send('Company logo not found');
+    }
+
+    const drive = await getDriveClient();
+    const meta = await drive.files.get({
+      fileId: user.companyLogoFileId,
+      fields: 'mimeType'
+    });
+
+    const mimeType = meta.data.mimeType || 'image/png';
+    res.setHeader('Content-Type', mimeType);
+
+    const driveRes = await drive.files.get(
+      { fileId: user.companyLogoFileId, alt: 'media' },
+      { responseType: 'stream' }
+    );
+
+    driveRes.data.pipe(res);
+  } catch (err) {
+    console.error('Stream company logo error:', err.message);
+    res.status(404).send('Company logo not found');
   }
 });
 
