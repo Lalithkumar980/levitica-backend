@@ -162,17 +162,19 @@ async function buildRawMessage(mailOptions) {
 /**
  * Convert nodemailer-style attachments → Resend attachment format.
  * Resend expects: { filename, content (Buffer|string), contentType }
- * NOTE: inline/cid attachments (like logo images) are excluded because
- * Resend does not support Content-ID (cid) inline images via its API.
  */
 function convertAttachmentsForResend(attachments) {
-  return attachments
-    .filter(a => !a.cid)  // Skip inline images (cid attachments)
-    .map(a => ({
+  return attachments.map(a => {
+    const obj = {
       filename:    a.filename || 'attachment',
       content:     a.content  || a.path,
       contentType: a.contentType || a.mimetype || 'application/octet-stream',
-    }));
+    };
+    if (a.cid) {
+      obj.contentId = a.cid;
+    }
+    return obj;
+  });
 }
 
 async function sendViaResend(mailOptions) {

@@ -40,6 +40,14 @@ function toProfileJson(user) {
     : null;
   obj.profileImage = user.profileImage || null;
   obj.profileImageFileId = user.profileImageFileId || null;
+
+  // Add company logo and brief text fields
+  obj.companyLogo = user.companyLogo || null;
+  obj.companyLogoFileId = user.companyLogoFileId || null;
+  obj.companyLogoUrl = user.companyLogoFileId
+    ? `/api/users/${userId}/company-logo?t=${ts}`
+    : null;
+  obj.companyBriefText = user.companyBriefText || '';
   return obj;
 }
 
@@ -90,7 +98,11 @@ router.get('/me', authenticate, async (req, res) => {
       hobbies: user.hobbies || '',
       bio: user.bio || '',
       dob: user.dob ? new Date(user.dob).toISOString().slice(0, 10) : '',
-      companyAssets: user.companyAssets || ''
+      companyAssets: user.companyAssets || '',
+      companyLogo: user.companyLogo || null,
+      companyLogoFileId: user.companyLogoFileId || null,
+      companyLogoUrl: user.companyLogoFileId ? `/api/users/${id}/company-logo` : null,
+      companyBriefText: user.companyBriefText || ''
     });
   } catch (err) {
     console.error('Get profile error:', err);
@@ -130,6 +142,36 @@ router.get('/:id/photo', async (req, res) => {
     console.error('Get profile photo error:', err);
     if (!res.headersSent) {
       res.status(500).json({ message: 'Failed to get profile photo' });
+    }
+  }
+});
+
+/** GET /api/users/:id/company-logo — proxy company logo from Google Drive */
+router.get('/:id/company-logo', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).lean();
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    
+    if (user.companyLogoFileId) {
+      const drive = await getDriveClient();
+      const fileStream = await drive.files.get({
+        fileId: user.companyLogoFileId,
+        alt: 'media'
+      }, { responseType: 'stream' });
+      
+      res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 1 day
+      return fileStream.data
+        .on('error', (err) => {
+          console.error('Error proxying company logo from Drive:', err);
+          if (!res.headersSent) res.status(500).end();
+        })
+        .pipe(res);
+    }
+    return res.status(404).json({ message: 'Logo not found' });
+  } catch (err) {
+    console.error('Get company logo error:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ message: 'Failed to get company logo' });
     }
   }
 });
@@ -236,6 +278,62 @@ router.delete('/me/photo', authenticate, async (req, res) => {
   } catch (err) {
     console.error('Remove profile photo error:', err);
     res.status(500).json({ message: 'Failed to remove profile photo' });
+  }
+});
+
+/** POST /api/users/me/company-logo — upload company logo (admin only) */
+router.post('/me/company-logo', authenticate, requireAdmin, (req, res, next) => {
+  profilePhotoUpload(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({ message: err.message || 'Invalid file' });
+    }
+    try {
+      const user = await User.findById(req.user._id);
+      if (!user) return res.status(404).json({ message: 'User not found' });
+      if (!req.file || !req.file.buffer) {
+        return res.status(400).json({ message: 'No logo file received' });
+      }
+      const drive = await getDriveClient();
+      const folderId = await ensureFolderPath(drive, ['levitica Company Logos']);
+      if (user.companyLogoFileId) {
+        await deleteFile(drive, user.companyLogoFileId);
+      }
+      const fileName = `logo_${Date.now()}_${req.user._id}.${req.file.mimetype.split('/')[1]}`;
+      const { fileId, fileUrl } = await uploadBufferToFolder({
+        drive,
+        folderId,
+        fileName,
+        buffer: req.file.buffer,
+        mimeType: req.file.mimetype,
+      });
+      user.companyLogo = fileUrl;
+      user.companyLogoFileId = fileId;
+      await user.save();
+      res.json(toProfileJson(user));
+    } catch (innerErr) {
+      console.error('Upload company logo error:', innerErr);
+      res.status(500).json({ message: 'Failed to upload company logo' });
+    }
+  });
+});
+
+/** DELETE /api/users/me/company-logo — remove company logo (admin only) */
+router.delete('/me/company-logo', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    const previousFileId = user.companyLogoFileId;
+    user.companyLogo = null;
+    user.companyLogoFileId = null;
+    await user.save();
+    if (previousFileId) {
+      const drive = await getDriveClient();
+      await deleteFile(drive, previousFileId);
+    }
+    res.json(toProfileJson(user));
+  } catch (err) {
+    console.error('Remove company logo error:', err);
+    res.status(500).json({ message: 'Failed to remove company logo' });
   }
 });
 
@@ -348,6 +446,35 @@ router.put('/:id', authenticate, requireAdmin, async (req, res) => {
     if (err.code === 11000) return res.status(400).json({ message: 'A user with this email already exists' });
     console.error('Update user error:', err);
     res.status(500).json({ message: 'Failed to update user' });
+  }
+});
+
+/** DELETE /api/users/:id — delete user (admin only) */
+router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Don't allow deletion of the user themselves
+    if (id === req.user._id.toString()) {
+      return res.status(400).json({ message: 'You cannot delete your own account' });
+    }
+    const user = await User.findById(id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    
+    // If the user has a profile image in Google Drive, delete it
+    if (user.profileImageFileId) {
+      try {
+        const drive = await getDriveClient();
+        await deleteFile(drive, user.profileImageFileId);
+      } catch (err) {
+        console.error('Error deleting profile image from Google Drive:', err);
+      }
+    }
+    
+    await User.findByIdAndDelete(id);
+    res.json({ message: 'User deleted successfully' });
+  } catch (err) {
+    console.error('Delete user error:', err);
+    res.status(500).json({ message: 'Failed to delete user' });
   }
 });
 

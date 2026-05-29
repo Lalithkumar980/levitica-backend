@@ -1,6 +1,8 @@
 const { sendMail } = require('./mailer');
 const fs = require('fs');
 const path = require('path');
+const User = require('../models/User');
+const { getDriveClient } = require('../services/googleDriveService');
 
 function logEmail(msg, data) {
   console.log(`[onboarding][email] ${msg}`, data != null ? data : '');
@@ -78,6 +80,41 @@ async function sendOnboardingInvite({ to, inviteUrl, candidateName, expiresAt, c
     • Any Relevant Certifications (Optional)
   `;
 
+  // Fetch Admin branding configuration
+  let logoAttachment = null;
+  const defaultLogoPath = path.join(__dirname, '../assets/Images/Levitica.png');
+  
+  try {
+    const admin = await User.findOne({ role: 'Admin' }).lean();
+    if (admin && admin.companyLogoFileId) {
+      try {
+        const drive = await getDriveClient();
+        const response = await drive.files.get({
+          fileId: admin.companyLogoFileId,
+          alt: 'media'
+        }, { responseType: 'arraybuffer' });
+        
+        logoAttachment = {
+          filename: 'logo.png',
+          content: Buffer.from(response.data),
+          cid: 'companylogo',
+        };
+      } catch (logoErr) {
+        console.error('[email] Failed to fetch custom logo from Google Drive:', logoErr);
+      }
+    }
+  } catch (dbErr) {
+    console.error('[email] Failed to query Admin user for branding:', dbErr);
+  }
+
+  if (!logoAttachment) {
+    logoAttachment = {
+      filename: 'logo.png',
+      content: fs.readFileSync(defaultLogoPath),
+      cid: 'companylogo',
+    };
+  }
+
   const text = [
     `Dear ${candidateName || 'Candidate'},`,
     '',
@@ -109,8 +146,6 @@ async function sendOnboardingInvite({ to, inviteUrl, candidateName, expiresAt, c
     'Phone: +91 9032503559',
   ].join('\n');
 
-  const logoPath = path.join(__dirname, '../assets/Images/Levitica.png');
-
   const html = `
     <p>Dear <strong>${candidateName || 'Candidate'}</strong>,</p>
     <p>Greetings from <strong>Levitica Technologies Pvt Ltd!</strong></p>
@@ -127,7 +162,7 @@ async function sendOnboardingInvite({ to, inviteUrl, candidateName, expiresAt, c
     <p>We look forward to receiving your submission and welcoming you to Levitica Technologies Pvt Ltd.</p>
     <p>BEST REGARDS,</p>
     <p style="text-align: left;">
-      <img src="cid:companylogo" alt="Levitica Logo" width="130" style="border: none; display: inline-block; pointer-events: none; user-select: none;" />
+      <img src="cid:companylogo" alt="Company Logo" width="130" style="border: none; display: inline-block; pointer-events: none; user-select: none;" />
     </p>
     <p>
       HR Team<br/>
@@ -136,12 +171,6 @@ async function sendOnboardingInvite({ to, inviteUrl, candidateName, expiresAt, c
       Phone: +91 9032503559
     </p>
   `;
-
-  const logoAttachment = {
-    filename: 'logo.png',
-    content: fs.readFileSync(logoPath),
-    cid: 'companylogo',
-  };
 
   try {
     const result = await sendMail({
@@ -198,6 +227,41 @@ async function sendOfferLetterEmail({
     process.env.OFFER_LETTER_SUBJECT ||
     'Offer Letter | Levitica Technologies Pvt. Ltd.';
 
+  // Fetch Admin branding configuration
+  let logoAttachment = null;
+  const defaultLogoPath = path.join(__dirname, '../assets/Images/Levitica.png');
+  
+  try {
+    const admin = await User.findOne({ role: 'Admin' }).lean();
+    if (admin && admin.companyLogoFileId) {
+      try {
+        const drive = await getDriveClient();
+        const response = await drive.files.get({
+          fileId: admin.companyLogoFileId,
+          alt: 'media'
+        }, { responseType: 'arraybuffer' });
+        
+        logoAttachment = {
+          filename: 'logo.png',
+          content: Buffer.from(response.data),
+          cid: 'companylogo',
+        };
+      } catch (logoErr) {
+        console.error('[email] Failed to fetch custom logo from Google Drive:', logoErr);
+      }
+    }
+  } catch (dbErr) {
+    console.error('[email] Failed to query Admin user for branding:', dbErr);
+  }
+
+  if (!logoAttachment) {
+    logoAttachment = {
+      filename: 'logo.png',
+      content: fs.readFileSync(defaultLogoPath),
+      cid: 'companylogo',
+    };
+  }
+
   const text = [
     `Dear ${safeCandidateName},`,
     '',
@@ -227,8 +291,6 @@ async function sendOfferLetterEmail({
     'Phone: +91 9032503559',
   ].join('\n');
 
-  const logoPath = path.join(__dirname, '../assets/Images/Levitica.png');
-
   const html = `
     <p>Dear <strong>${safeCandidateName}</strong>,</p>
     <p>We are pleased to offer you the position of "<strong>${safeRole}</strong>" at <strong>Levitica Technologies Pvt. Ltd.</strong> Please find your offer letter attached to this email.</p>
@@ -245,7 +307,7 @@ async function sendOfferLetterEmail({
     <p>We look forward to welcoming you to the Levitica family and beginning an exciting journey of growth and innovation together.</p>
     <p>BEST REGARDS,</p>
     <p style="text-align: left;">
-      <img src="cid:companylogo" alt="Levitica Logo" width="130" style="border: none; display: inline-block; pointer-events: none; user-select: none;" />
+      <img src="cid:companylogo" alt="Company Logo" width="130" style="border: none; display: inline-block; pointer-events: none; user-select: none;" />
     </p>
     <p>
       HR Team<br/>
@@ -263,12 +325,6 @@ async function sendOfferLetterEmail({
     content: file.buffer,
     contentType: file.mimetype || 'application/pdf',
   }));
-
-  const logoAttachment = {
-    filename: 'logo.png',
-    content: fs.readFileSync(logoPath),
-    cid: 'companylogo',
-  };
 
   try {
     const result = await sendMail({

@@ -11,3 +11,4 @@ router.get('/users/:id/stats', adminController.getUserStats);
 router.get('/recent-activity', adminController.recentActivity);
 
 module.exports = router;
+``

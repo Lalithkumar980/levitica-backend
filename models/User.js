@@ -20,6 +20,9 @@ const userSchema = new mongoose.Schema(
     profilePhoto: { type: String, default: null, trim: true }, // legacy local filename (kept for backward compatibility)
 profileImage: { type: String, default: null, trim: true }, // Google Drive public URL
 profileImageFileId: { type: String, default: null, trim: true }, // Google Drive file ID for deletion
+    companyLogo: { type: String, default: null, trim: true }, // Google Drive logo URL
+    companyLogoFileId: { type: String, default: null, trim: true }, // Google Drive logo file ID
+    companyBriefText: { type: String, default: '', trim: true }, // Email custom text
     // Profile page (edit by user)
     phone: { type: String, default: '', trim: true },
     city: { type: String, default: '', trim: true },
