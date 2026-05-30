@@ -94,6 +94,8 @@ async function create(req, res) {
         ? body.recurring
         : "One-off",
       notes: body.notes != null ? String(body.notes).trim() : "",
+      screenshotUrl:
+        body.screenshotUrl != null ? String(body.screenshotUrl).trim() : "",
     };
     const doc = await Expense.create(payload);
     try {
@@ -141,6 +143,8 @@ async function update(req, res) {
     )
       doc.recurring = body.recurring;
     if (body.notes !== undefined) doc.notes = String(body.notes).trim();
+    if (body.screenshotUrl !== undefined)
+      doc.screenshotUrl = String(body.screenshotUrl).trim();
     await doc.save();
     res.json(doc);
   } catch (err) {
