@@ -28,6 +28,10 @@ const PaymentSchema = new mongoose.Schema(
     notes: {
       type: String,
     },
+    screenshotUrl: {
+      type: String,
+      default: '',
+    },
   },
   { timestamps: true }
 );

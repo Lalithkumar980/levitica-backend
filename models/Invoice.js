@@ -17,7 +17,7 @@ const InvoiceSchema = new mongoose.Schema(
     },
     category: {
       type: String,
-      enum: ['Revenue', 'Expense'],
+      enum: ['Revenue', 'Training', 'Placement', 'Services'],
       default: 'Revenue',
     },
     baseAmount: {

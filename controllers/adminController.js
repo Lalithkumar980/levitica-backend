@@ -318,7 +318,7 @@ async function recentActivity(req, res) {
     expenses.forEach(exp => {
       allActivities.push({
         type: 'expense',
-        title: `Expense recorded: ${exp.title} · ₹${Number(exp.amount || 0).toFixed(2)}`,
+        title: `Expense recorded: ${exp.vendor} · ₹${Number(exp.amount || 0).toFixed(2)}`,
         subtitle: `${exp.vendor || 'Vendor'} · ${exp.category || 'Expense'}`,
         createdAt: exp.createdAt,
         timestamp: exp.createdAt,

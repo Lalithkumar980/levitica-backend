@@ -153,6 +153,7 @@ async function create(req, res) {
         body.referenceNo != null ? String(body.referenceNo).trim() : "",
       invoiceRef: body.invoiceRef != null ? String(body.invoiceRef).trim() : "",
       notes: body.notes != null ? String(body.notes).trim() : "",
+      screenshotUrl: body.screenshotUrl != null ? String(body.screenshotUrl).trim() : "",
     };
     const doc = await Payment.create(payload);
     await recalculateInvoiceFromPayments(payload.invoiceRef);
@@ -196,6 +197,8 @@ async function update(req, res) {
     if (body.invoiceRef !== undefined)
       doc.invoiceRef = String(body.invoiceRef).trim();
     if (body.notes !== undefined) doc.notes = String(body.notes).trim();
+    if (body.screenshotUrl !== undefined)
+      doc.screenshotUrl = String(body.screenshotUrl).trim();
     await doc.save();
     await recalculateInvoiceFromPayments(oldInvoiceRef);
     if (doc.invoiceRef !== oldInvoiceRef)

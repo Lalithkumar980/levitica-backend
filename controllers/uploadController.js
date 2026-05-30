@@ -30,9 +30,14 @@ async function uploadToDrive(req, res) {
         : '';
 
   const rootName = (process.env.GOOGLE_DRIVE_ROOT_FOLDER || DEFAULT_ROOT_FOLDER).trim() || DEFAULT_ROOT_FOLDER;
-  const pathSegs = [rootName];
-  if (subfolderRaw) {
-    pathSegs.push(sanitizeSegment(subfolderRaw));
+  let pathSegs = [];
+  if (subfolderRaw === 'Payments Received') {
+    pathSegs = [sanitizeSegment(subfolderRaw)];
+  } else {
+    pathSegs = [rootName];
+    if (subfolderRaw) {
+      pathSegs.push(sanitizeSegment(subfolderRaw));
+    }
   }
 
   try {

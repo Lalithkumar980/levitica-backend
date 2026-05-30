@@ -44,10 +44,7 @@ async function list(req, res) {
       filter.category = req.query.category;
     if (req.query.search && req.query.search.trim()) {
       const q = req.query.search.trim();
-      filter.$or = [
-        { title: new RegExp(q, "i") },
-        { vendor: new RegExp(q, "i") },
-      ];
+      filter.vendor = new RegExp(q, "i");
     }
     const page = parseInt(req.query.page, 10) || 1;
     const limit = Math.min(parseInt(req.query.limit, 10) || 50, 500);
@@ -83,7 +80,6 @@ async function create(req, res) {
     const body = req.body || {};
     const amount = toNumber(body.amount) ?? 0;
     const payload = {
-      title: body.title != null ? String(body.title).trim() : "",
       category: CATEGORIES.includes(body.category)
         ? body.category
         : "Infrastructure",
@@ -103,8 +99,8 @@ async function create(req, res) {
     try {
       await recordFinanceActivity(req, {
         type: "expense_added",
-        title: `Expense recorded: ${doc.title}`,
-        subtitle: `${doc.vendor || "Vendor"} · ₹${Number(doc.amount || 0).toFixed(2)}`,
+        title: `Expense recorded: ${doc.vendor}`,
+        subtitle: `₹${Number(doc.amount || 0).toFixed(2)} · ${doc.category || "Expense"}`,
         icon: "expense",
         metadata: {
           expenseId: doc._id,
@@ -128,7 +124,6 @@ async function update(req, res) {
     const doc = await Expense.findById(req.params.id);
     if (!doc) return res.status(404).json({ message: "Expense not found" });
     const body = req.body || {};
-    if (body.title !== undefined) doc.title = String(body.title).trim();
     if (body.category !== undefined && CATEGORIES.includes(body.category))
       doc.category = body.category;
     if (body.amount !== undefined) doc.amount = toNumber(body.amount) ?? 0;

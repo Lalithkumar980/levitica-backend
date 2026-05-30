@@ -2,10 +2,6 @@ const mongoose = require('mongoose');
 
 const ExpenseSchema = new mongoose.Schema(
   {
-    title: {
-      type: String,
-      required: true,
-    },
     category: {
       type: String,
       enum: ['Infrastructure', 'Rent', 'Salaries', 'Software', 'Travel', 'Marketing', 'Utilities'],
@@ -17,7 +13,7 @@ const ExpenseSchema = new mongoose.Schema(
     },
     vendor: {
       type: String,
-      default: '',
+      required: true,
     },
     status: {
       type: String,

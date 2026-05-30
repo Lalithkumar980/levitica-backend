@@ -131,19 +131,18 @@ async function create(req, res) {
       invoiceNo: invoiceNoRaw || (await generateInvoiceNo()),
       client: body.client != null ? String(body.client).trim() : "",
       type: body.type === "Training" ? "Training" : "Company",
-      category: body.category === "Expense" ? "Expense" : "Revenue",
+      category: ["Revenue", "Training", "Placement", "Services"].includes(body.category)
+        ? body.category
+        : "Revenue",
       baseAmount,
       gstRate,
       gst,
       total,
-      status: ["Pending", "Paid", "Overdue", "Partial"].includes(body.status)
-        ? body.status
-        : "Pending",
-      paymentMethod:
-        body.paymentMethod != null ? String(body.paymentMethod).trim() : "",
+      status: "Pending",
+      paymentMethod: "",
       invoiceDate: parseDate(body.invoiceDate),
       dueDate: parseDate(body.dueDate),
-      paidDate: parseDate(body.paidDate),
+      paidDate: undefined,
       description:
         body.description != null ? String(body.description).trim() : "",
     };
@@ -182,8 +181,11 @@ async function update(req, res) {
     if (body.client !== undefined) doc.client = String(body.client).trim();
     if (body.type !== undefined)
       doc.type = body.type === "Training" ? "Training" : "Company";
-    if (body.category !== undefined)
-      doc.category = body.category === "Expense" ? "Expense" : "Revenue";
+    if (body.category !== undefined) {
+      doc.category = ["Revenue", "Training", "Placement", "Services"].includes(body.category)
+        ? body.category
+        : "Revenue";
+    }
     const hasBaseAmount = body.baseAmount !== undefined;
     const hasGstRate = body.gstRate !== undefined;
     if (hasBaseAmount) doc.baseAmount = toNumber(body.baseAmount) ?? 0;
@@ -195,17 +197,10 @@ async function update(req, res) {
       doc.gst = Math.round((baseAmount * gstRate) / 100);
       doc.total = baseAmount + doc.gst;
     }
-    if (
-      body.status !== undefined &&
-      ["Pending", "Paid", "Overdue", "Partial"].includes(body.status)
-    )
-      doc.status = body.status;
-    if (body.paymentMethod !== undefined)
-      doc.paymentMethod = String(body.paymentMethod).trim();
+    // status, paymentMethod, and paidDate are automatically managed by payments and not directly updated here
     if (body.invoiceDate !== undefined)
       doc.invoiceDate = parseDate(body.invoiceDate);
     if (body.dueDate !== undefined) doc.dueDate = parseDate(body.dueDate);
-    if (body.paidDate !== undefined) doc.paidDate = parseDate(body.paidDate);
     if (body.description !== undefined)
       doc.description = String(body.description).trim();
     await doc.save();
