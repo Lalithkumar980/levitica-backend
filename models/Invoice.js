@@ -10,6 +10,14 @@ const InvoiceSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    clientEmail: {
+      type: String,
+      default: '',
+    },
+    clientPhone: {
+      type: String,
+      default: '',
+    },
     type: {
       type: String,
       enum: ['Company', 'Training'],

@@ -130,6 +130,8 @@ async function create(req, res) {
     const payload = {
       invoiceNo: invoiceNoRaw || (await generateInvoiceNo()),
       client: body.client != null ? String(body.client).trim() : "",
+      clientEmail: body.clientEmail != null ? String(body.clientEmail).trim() : "",
+      clientPhone: body.clientPhone != null ? String(body.clientPhone).trim() : "",
       type: body.type === "Training" ? "Training" : "Company",
       category: ["Revenue", "Training", "Placement", "Services"].includes(body.category)
         ? body.category
@@ -179,6 +181,8 @@ async function update(req, res) {
     if (body.invoiceNo !== undefined)
       doc.invoiceNo = String(body.invoiceNo).trim();
     if (body.client !== undefined) doc.client = String(body.client).trim();
+    if (body.clientEmail !== undefined) doc.clientEmail = String(body.clientEmail).trim();
+    if (body.clientPhone !== undefined) doc.clientPhone = String(body.clientPhone).trim();
     if (body.type !== undefined)
       doc.type = body.type === "Training" ? "Training" : "Company";
     if (body.category !== undefined) {
