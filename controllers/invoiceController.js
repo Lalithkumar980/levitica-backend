@@ -1,6 +1,8 @@
 const Invoice = require("../models/Invoice");
 const Payment = require("../models/Payment");
 const { recordFinanceActivity } = require("../utils/financeActivity");
+const { sendMail }             = require("../utils/mailer");
+const { buildInvoiceEmail }    = require("../utils/invoiceMailTemplate");
 
 const DEFAULT_GST_RATE = 18;
 
@@ -149,6 +151,31 @@ async function create(req, res) {
         body.description != null ? String(body.description).trim() : "",
     };
     const doc = await Invoice.create(payload);
+
+    // ── Send invoice email to client (non-blocking) ──────────────────────────
+    const recipientEmail = (body.clientEmail || '').trim();
+    if (recipientEmail) {
+      try {
+        const { subject, html, text } = buildInvoiceEmail(doc);
+        const mailResult = await sendMail({
+          to:      recipientEmail,
+          subject,
+          html,
+          text,
+          from:    process.env.MAIL_FROM || process.env.SMTP_USER,
+        });
+        if (mailResult.ok) {
+          console.log(`[invoice] ✅ Invoice email sent to ${recipientEmail} for ${doc.invoiceNo}`);
+        } else {
+          console.warn(`[invoice] ⚠️  Invoice email failed for ${recipientEmail}:`, mailResult.error);
+        }
+      } catch (mailErr) {
+        // Never let email errors block the API response
+        console.error('[invoice] Email send error (non-fatal):', mailErr.message || mailErr);
+      }
+    } else {
+      console.log(`[invoice] ℹ️  No clientEmail provided — skipping invoice email for ${doc.invoiceNo}`);
+    }
     try {
       await recordFinanceActivity(req, {
         type: "invoice_created",
