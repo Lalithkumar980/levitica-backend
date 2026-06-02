@@ -12,6 +12,10 @@ const ContactSchema = new mongoose.Schema(
     company: {
       type: String,
     },
+    companyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Company',
+    },
     title: {
       type: String,
     }, // Job title e.g. CTO, CEO
@@ -48,8 +52,12 @@ const ContactSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      default: 'Lead',
-      enum: ['Lead', 'Prospect', 'Customer'],
+      default: 'Prospect',
+      enum: ['Prospect', 'Customer', 'Partner'],
+    },
+    department: {
+      type: String,
+      enum: ['Engineering', 'Product', 'IT', 'Procurement', 'C-Suite', 'Operations'],
     },
     tags: [{ type: String }],
     notes: {

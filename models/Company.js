@@ -8,6 +8,7 @@ const CompanySchema = new mongoose.Schema(
     },
     industry: {
       type: String,
+      enum: ['Cloud Infra', 'DevOps', 'SaaS', 'ERP-CRM', 'Data Analytics', 'IT Services', 'Enterprise IT'],
     },
     city: {
       type: String,
@@ -32,8 +33,13 @@ const CompanySchema = new mongoose.Schema(
     }, // Annual revenue in ₹
     status: {
       type: String,
-      default: 'Lead',
-      enum: ['Lead', 'Prospect', 'Customer', 'Partner'],
+      default: 'Active',
+      enum: ['Active', 'Inactive'],
+    },
+    companySize: {
+      type: String,
+      enum: ['Enterprise', 'Mid-market', 'SMB', 'Startup'],
+      default: 'SMB',
     },
     owner: {
       type: mongoose.Schema.Types.ObjectId,

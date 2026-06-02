@@ -4,9 +4,6 @@ const mongoose = require('mongoose');
 // lead: 10% | contacted: 25% | qualified: 40% | meeting: 55%
 // proposal: 70% | negotiation: 85% | won: 100% | lost: 0%
 const STAGE_PROBABILITY = {
-  lead: 10,
-  contacted: 25,
-  qualified: 40,
   meeting: 55,
   proposal: 70,
   negotiation: 85,
@@ -40,11 +37,8 @@ const DealSchema = new mongoose.Schema(
     stage: {
       type: String,
       required: true,
-      default: 'lead',
+      default: 'meeting',
       enum: [
-        'lead',
-        'contacted',
-        'qualified',
         'meeting',
         'proposal',
         'negotiation',
@@ -56,7 +50,7 @@ const DealSchema = new mongoose.Schema(
       type: Number,
       min: 0,
       max: 100,
-      default: 10,
+      default: 55,
     }, // probability %
     product: {
       type: String,

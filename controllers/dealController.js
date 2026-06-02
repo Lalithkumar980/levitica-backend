@@ -1,8 +1,9 @@
 const Deal = require('../models/Deal');
+const Company = require('../models/Company');
 const { scopeQueryByRole, ensureOwnerForCreate, canEditRecord, isRep } = require('../middleware/roles');
 const { toCSV } = require('../utils/csvExport');
 
-const STAGE_ORDER = ['lead', 'contacted', 'qualified', 'meeting', 'proposal', 'negotiation', 'won', 'lost'];
+const STAGE_ORDER = ['meeting', 'proposal', 'negotiation', 'won', 'lost'];
 const DEAL_EXPORT_HEADERS = ['title', 'company', 'amount', 'stage', 'prob', 'product', 'source', 'industry', 'city', 'closeDate', 'ownerName', 'createdAt'];
 
 function buildDealFilter(req) {
@@ -72,7 +73,7 @@ async function list(req, res) {
 async function create(req, res) {
   try {
     const body = req.body || {};
-    const stage = body.stage || 'lead';
+    const stage = body.stage || 'meeting';
     const autoProbability = body.prob != null ? body.prob : Deal.getProbabilityForStage(stage);
     const payload = ensureOwnerForCreate(req, {
       title: body.title, company: body.company, companyId: body.companyId, contactId: body.contactId,
@@ -82,6 +83,9 @@ async function create(req, res) {
       activities: body.activities, files: body.files,
     });
     const doc = await Deal.create(payload);
+    if (doc.companyId) {
+      await Company.findByIdAndUpdate(doc.companyId, { $addToSet: { deals: doc._id } });
+    }
     const populated = await Deal.findById(doc._id).populate('owner', 'name email').lean();
     res.status(201).json({ message: 'Deal created', deal: populated });
   } catch (err) {
@@ -114,6 +118,7 @@ async function update(req, res) {
     if (!canEditRecord(req, doc)) return res.status(403).json({ message: 'Access denied to this deal' });
     const body = req.body || {};
     const allowed = ['title', 'company', 'companyId', 'contactId', 'amount', 'stage', 'prob', 'product', 'owner', 'source', 'industry', 'city', 'closeDate', 'followup', 'notes', 'activities', 'files'];
+    const oldCompanyId = doc.companyId;
     let stageChanged = false;
     allowed.forEach((key) => {
       if (body[key] !== undefined) {
@@ -125,6 +130,14 @@ async function update(req, res) {
     doc.lastAct = new Date();
     if (isRep(req)) doc.owner = req.user._id;
     await doc.save();
+    if (body.companyId !== undefined && String(oldCompanyId) !== String(body.companyId)) {
+      if (oldCompanyId) {
+        await Company.findByIdAndUpdate(oldCompanyId, { $pull: { deals: doc._id } });
+      }
+      if (body.companyId) {
+        await Company.findByIdAndUpdate(body.companyId, { $addToSet: { deals: doc._id } });
+      }
+    }
     const populated = await Deal.findById(doc._id)
       .populate('owner', 'name')
       .populate('contactId')
@@ -142,6 +155,9 @@ async function remove(req, res) {
   try {
     const doc = await Deal.findByIdAndDelete(req.params.id);
     if (!doc) return res.status(404).json({ message: 'Deal not found' });
+    if (doc.companyId) {
+      await Company.findByIdAndUpdate(doc.companyId, { $pull: { deals: doc._id } });
+    }
     res.json({ message: 'Deal deleted', id: doc._id });
   } catch (err) {
     console.error('Deal delete error:', err);

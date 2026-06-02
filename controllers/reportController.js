@@ -6,7 +6,7 @@ const User = require('../models/User');
 const { scopeQueryByRole, canViewAll, requireManagerOrAdmin } = require('../middleware/roles');
 
 const REP_FIELD = 'rep';
-const STAGE_ORDER = ['lead', 'contacted', 'qualified', 'meeting', 'proposal', 'negotiation', 'won', 'lost'];
+const STAGE_ORDER = ['meeting', 'proposal', 'negotiation', 'won', 'lost'];
 const ACTIVE_STAGES = STAGE_ORDER.filter((s) => s !== 'won' && s !== 'lost');
 
 async function dashboard(req, res) {

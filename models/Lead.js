@@ -65,7 +65,31 @@ const LeadSchema = new mongoose.Schema(
     status: {
       type: String,
       default: 'New',
-      enum: ['New', 'Contacted', 'Qualified', 'Converted', 'Disqualified'],
+      enum: ['New', 'Called', 'Emailed', 'No Response', 'Interested', 'Converted', 'Disqualified'],
+    },
+    jobTitle: {
+      type: String,
+    },
+    techStack: [{
+      type: String,
+    }],
+    heatLevel: {
+      type: String,
+      enum: ['Hot', 'Warm', 'Cold'],
+      default: 'Warm',
+    },
+    leadScore: {
+      type: Number,
+      min: 0,
+      max: 100,
+      default: 0,
+    },
+    estimatedValue: {
+      type: Number,
+      default: 0,
+    },
+    lastContacted: {
+      type: Date,
     },
     owner: {
       type: mongoose.Schema.Types.ObjectId,

@@ -42,12 +42,17 @@ const ROLES = {
   ADMIN: 'Admin',
   MANAGER: 'Sales Manager',
   REP: 'Sales Rep',
+  READ_ONLY: 'Read Only',
 };
 
-/** True if user can view every record in the DB (Admin or Manager) */
+/** True if user can view every record in the DB (Admin, Manager, or Read Only) */
 function canViewAll(req) {
   if (!req.user) return false;
-  return req.user.role === ROLES.ADMIN || req.user.role === ROLES.MANAGER;
+  return (
+    req.user.role === ROLES.ADMIN ||
+    req.user.role === ROLES.MANAGER ||
+    req.user.role === ROLES.READ_ONLY
+  );
 }
 
 /** True if user is a Sales Rep (own records only) */
@@ -126,13 +131,15 @@ function ensureOwnerForCreate(req, body = {}, ownerField = 'owner') {
 
 /**
  * True if req.user can edit this record. Admin/Manager: yes. Rep: only if record.owner === req.user._id.
+ * Read Only: never.
  * @param {object} req
  * @param {object} record - document with owner field (ObjectId or string)
  * @param {string} ownerField - default 'owner'
  */
 function canEditRecord(req, record, ownerField = 'owner') {
   if (!req.user) return false;
-  if (canViewAll(req)) return true;
+  if (req.user.role === ROLES.READ_ONLY) return false;
+  if (req.user.role === ROLES.ADMIN || req.user.role === ROLES.MANAGER) return true;
   if (!record || record[ownerField] == null) return false;
   return String(record[ownerField]) === String(req.user._id);
 }
@@ -189,6 +196,17 @@ function requireDelete(req, res, next) {
 }
 
 /**
+ * Require write access (Create/Edit/Delete). 403 if Read Only.
+ */
+function requireWriteAccess(req, res, next) {
+  if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+  if (req.user.role === ROLES.READ_ONLY) {
+    return res.status(403).json({ message: 'Create/Edit/Delete not allowed for Read Only role' });
+  }
+  next();
+}
+
+/**
  * Require Finance Management or Admin. Use for all finance routes (invoices, expenses, payments, reports).
  */
 function requireFinanceOrAdmin(req, res, next) {
@@ -217,5 +235,6 @@ module.exports = {
   requireExport,
   requireBulkUpload,
   requireDelete,
+  requireWriteAccess,
   requireFinanceOrAdmin,
 };

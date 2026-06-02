@@ -68,6 +68,8 @@ async function create(req, res) {
       fname: body.fname, lname: body.lname, company: body.company, phone: body.phone, email: body.email,
       industry: body.industry, city: body.city, country: body.country, source: body.source,
       status: body.status, owner: body.owner, notes: body.notes,
+      jobTitle: body.jobTitle, techStack: body.techStack, heatLevel: body.heatLevel,
+      leadScore: body.leadScore, estimatedValue: body.estimatedValue, lastContacted: body.lastContacted,
     });
     const doc = await Lead.create(payload);
     res.status(201).json({ message: 'Lead created', lead: doc });
@@ -95,7 +97,10 @@ async function update(req, res) {
     if (!doc) return res.status(404).json({ message: 'Lead not found' });
     if (!canEditRecord(req, doc)) return res.status(403).json({ message: 'Access denied to this lead' });
     const body = req.body || {};
-    const allowed = ['fname', 'lname', 'company', 'phone', 'email', 'industry', 'city', 'country', 'source', 'status', 'notes', 'owner'];
+    const allowed = [
+      'fname', 'lname', 'company', 'phone', 'email', 'industry', 'city', 'country', 'source', 'status', 'notes', 'owner',
+      'jobTitle', 'techStack', 'heatLevel', 'leadScore', 'estimatedValue', 'lastContacted'
+    ];
     allowed.forEach((key) => { if (body[key] !== undefined) doc[key] = body[key]; });
     if (isRep(req)) doc.owner = req.user._id;
     await doc.save();
@@ -127,16 +132,25 @@ async function convert(req, res) {
     const createDeal = req.body?.createDeal !== false;
     let deal = null;
     if (createDeal) {
+      const body = req.body || {};
       deal = await Deal.create({
-        title: `Deal: ${lead.fname} ${lead.lname}${lead.company ? ` - ${lead.company}` : ''}`.trim(),
-        company: lead.company || lead.fname + ' ' + lead.lname,
-        amount: 0, stage: 'lead', prob: 10, owner: lead.owner,
-        source: lead.source, industry: lead.industry, city: lead.city,
-        notes: lead.notes ? `From lead: ${lead.notes}` : undefined,
+        title: (body.title || `Deal: ${lead.fname} ${lead.lname}${lead.company ? ` - ${lead.company}` : ''}`).trim(),
+        company: lead.company || `${lead.fname} ${lead.lname}`,
+        amount: body.amount != null ? Number(body.amount) : 0,
+        stage: 'meeting',
+        prob: Deal.getProbabilityForStage('meeting'),
+        product: body.product || undefined,
+        owner: lead.owner,
+        source: lead.source,
+        industry: lead.industry,
+        city: lead.city,
+        closeDate: body.closeDate || undefined,
+        followup: body.followup || undefined,
+        notes: body.notes || (lead.notes ? `From lead: ${lead.notes}` : undefined),
         lastAct: new Date(),
       });
     }
-    res.json({ message: 'Lead converted', lead, deal: deal || undefined });
+    res.json({ message: 'Lead promoted to Deal', lead, deal: deal || undefined });
   } catch (err) {
     console.error('Lead convert error:', err);
     res.status(500).json({ message: err.message || 'Failed to convert lead' });

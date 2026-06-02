@@ -1,4 +1,6 @@
 const Company = require('../models/Company');
+const Contact = require('../models/Contact');
+const Deal = require('../models/Deal');
 const { scopeQueryByRole, ensureOwnerForCreate, canEditRecord, isRep } = require('../middleware/roles');
 
 async function list(req, res) {
@@ -19,7 +21,36 @@ async function list(req, res) {
       Company.find(filter).populate('owner', 'name email').sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
       Company.countDocuments(filter),
     ]);
-    res.json({ companies, total, page, pages: Math.ceil(total / limit) || 1 });
+    const companyIds = companies.map(c => c._id);
+    const [contactCounts, dealStats] = await Promise.all([
+      Contact.aggregate([
+        { $match: { companyId: { $in: companyIds } } },
+        { $group: { _id: '$companyId', count: { $sum: 1 } } }
+      ]),
+      Deal.aggregate([
+        { $match: { companyId: { $in: companyIds } } },
+        { $group: { _id: '$companyId', count: { $sum: 1 }, totalAmount: { $sum: '$amount' } } }
+      ])
+    ]);
+    const contactCountsMap = {};
+    contactCounts.forEach(item => {
+      if (item._id) contactCountsMap[item._id.toString()] = item.count;
+    });
+    const dealCountsMap = {};
+    const pipelineValueMap = {};
+    dealStats.forEach(item => {
+      if (item._id) {
+        dealCountsMap[item._id.toString()] = item.count;
+        pipelineValueMap[item._id.toString()] = item.totalAmount;
+      }
+    });
+    const companiesWithStats = companies.map(c => ({
+      ...c,
+      contactsCount: contactCountsMap[c._id.toString()] || 0,
+      dealsCount: dealCountsMap[c._id.toString()] || 0,
+      pipelineValue: pipelineValueMap[c._id.toString()] || 0
+    }));
+    res.json({ companies: companiesWithStats, total, page, pages: Math.ceil(total / limit) || 1 });
   } catch (err) {
     console.error('Companies list error:', err);
     res.status(500).json({ message: 'Failed to fetch companies' });
@@ -31,7 +62,7 @@ async function create(req, res) {
     const body = req.body || {};
     const payload = ensureOwnerForCreate(req, {
       name: body.name, industry: body.industry, city: body.city, country: body.country, website: body.website,
-      phone: body.phone, employees: body.employees, revenue: body.revenue, status: body.status, owner: body.owner,
+      phone: body.phone, employees: body.employees, revenue: body.revenue, status: body.status, companySize: body.companySize, owner: body.owner,
       contacts: body.contacts, deals: body.deals, notes: body.notes,
     });
     const doc = await Company.create(payload);
@@ -60,7 +91,7 @@ async function update(req, res) {
     if (!doc) return res.status(404).json({ message: 'Company not found' });
     if (!canEditRecord(req, doc)) return res.status(403).json({ message: 'Access denied to this company' });
     const body = req.body || {};
-    const allowed = ['name', 'industry', 'city', 'country', 'website', 'phone', 'employees', 'revenue', 'status', 'contacts', 'deals', 'notes', 'owner'];
+    const allowed = ['name', 'industry', 'city', 'country', 'website', 'phone', 'employees', 'revenue', 'status', 'companySize', 'contacts', 'deals', 'notes', 'owner'];
     allowed.forEach((key) => { if (body[key] !== undefined) doc[key] = body[key]; });
     if (isRep(req)) doc.owner = req.user._id;
     await doc.save();

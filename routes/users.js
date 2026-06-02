@@ -176,6 +176,10 @@ router.post('/', verifyToken, adminOnly, async (req, res) => {
     } else if (role === 'Sales Rep') {
       viewReports = true;
       modules = ['/dashboard', '/leads', '/contacts', '/companies', '/deals', '/activity', '/call-tracking', '/email-log', '/documents'];
+    } else if (role === 'Read Only') {
+      viewAll = true;
+      viewReports = true;
+      modules = ['/dashboard', '/leads', '/contacts', '/companies', '/deals', '/activity', '/call-tracking', '/email-log', '/documents', '/reports'];
     }
 
     const user = new User({
@@ -284,6 +288,10 @@ router.put('/:id', verifyToken, adminOnly, async (req, res) => {
       } else if (role === 'Sales Rep') {
         viewReports = true;
         modules = ['/dashboard', '/leads', '/contacts', '/companies', '/deals', '/activity', '/call-tracking', '/email-log', '/documents'];
+      } else if (role === 'Read Only') {
+        viewAll = true;
+        viewReports = true;
+        modules = ['/dashboard', '/leads', '/contacts', '/companies', '/deals', '/activity', '/call-tracking', '/email-log', '/documents', '/reports'];
       }
 
       user.viewAll = viewAll;
