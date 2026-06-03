@@ -10,6 +10,9 @@ router.get('/', dealController.list);
 router.post('/', requireWriteAccess, dealController.create);
 router.get('/:id', dealController.getOne);
 router.put('/:id', requireWriteAccess, dealController.update);
+router.patch('/:id', requireWriteAccess, dealController.update);
+router.patch('/:id/stage', requireWriteAccess, dealController.updateStage);
+router.post('/:id/activity', requireWriteAccess, dealController.logActivity);
 router.delete('/:id', adminOnly, dealController.remove);
 
 module.exports = router;

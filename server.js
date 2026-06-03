@@ -34,6 +34,7 @@ function isPrivateLanOrigin(origin) {
 const fixedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
+  "http://10.190.40.206:3000",
 
   "http://localhost:8081",
   "https://levitica-mangement.netlify.app",
@@ -168,18 +169,18 @@ app.get("/oauth2callback", async (req, res) => {
         "<html><body><h2>No authorization code found</h2><p>Please launch the flow from <a href='/api/v1/auth/google-url'>here</a>.</p></body></html>"
       );
   }
-  
+
   try {
     const { google } = require("googleapis");
     const fsPath = require("path");
     const { trimEnv } = require("./services/googleDriveService");
-    
+
     const oauth2Client = new google.auth.OAuth2(
       trimEnv(process.env.GOOGLE_CLIENT_ID),
       trimEnv(process.env.GOOGLE_CLIENT_SECRET),
       trimEnv(process.env.GOOGLE_REDIRECT_URI)
     );
-    
+
     logAuth("Exchanging code for tokens...");
     const { tokens } = await oauth2Client.getToken(code);
     logAuth(`Tokens received: ${Object.keys(tokens).join(", ")}`);
@@ -379,9 +380,9 @@ async function start() {
       // Send a welcome ping so the client knows the socket is alive
       try {
         ws.send(JSON.stringify({ type: "connected", message: "Levitica notification socket ready" }));
-      } catch (_) {}
+      } catch (_) { }
 
-      ws.on("error", () => {});
+      ws.on("error", () => { });
     });
 
     console.log(`[ws] WebSocket server active on ws://localhost:${PORT}`);
