@@ -90,6 +90,16 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", message: "Backend is running" });
 });
 
+app.get("/api/debug-deals", async (req, res) => {
+  try {
+    const Deal = require("./models/Deal");
+    const deals = await Deal.find({}).populate('owner', 'name role').lean();
+    res.json(deals);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // DB health — use on Render to confirm the same MongoDB database name as local (login users live here)
 app.get("/api/health/db", (req, res) => {
   const ready = mongoose.connection.readyState;

@@ -1,6 +1,7 @@
 const Lead = require('../models/Lead');
 const Deal = require('../models/Deal');
 const Contact = require('../models/Contact');
+const Company = require('../models/Company');
 const User = require('../models/User');
 const { scopeQueryByRole, ensureOwnerForCreate, canEditRecord, isRep } = require('../middleware/roles');
 const { toCSV } = require('../utils/csvExport');
@@ -193,6 +194,8 @@ async function convert(req, res) {
     if (createDeal) {
       const body = req.body || {};
       const contactEmail = lead.email || `unknown-${lead._id}@example.com`;
+      const ownerId = lead.owner || lead.owner_id || req.user._id;
+
       let contactDoc = await Contact.findOne({ company_id: lead.company_id, email: contactEmail });
       if (!contactDoc) {
         contactDoc = await Contact.create({
@@ -204,8 +207,8 @@ async function convert(req, res) {
           company: lead.company,
           company_id: lead.company_id,
           companyId: lead.company_id,
-          owner: lead.owner,
-          owner_id: lead.owner,
+          owner: ownerId,
+          owner_id: ownerId,
           source: lead.source,
           status: 'Prospect',
           type: 'Prospect',
@@ -226,9 +229,11 @@ async function convert(req, res) {
         stage: body.stage || 'qualified',
         prob: Deal.getProbabilityForStage(body.stage || 'qualified'),
         product: body.product || undefined,
-        owner: lead.owner,
-        owner_id: lead.owner,
+        owner: ownerId,
+        owner_id: ownerId,
         source: lead.source,
+        source_lead_id: lead._id,
+        sourceLeadId: lead._id,
         industry: lead.industry,
         city: lead.city,
         closeDate: body.closeDate || undefined,
@@ -236,6 +241,13 @@ async function convert(req, res) {
         notes: body.notes || (lead.notes ? `From lead: ${lead.notes}` : undefined),
         lastAct: new Date(),
       });
+
+      if (deal.company_id) {
+        await Company.findByIdAndUpdate(deal.company_id, { $addToSet: { deals: deal._id } });
+      }
+      if (contactDoc.company_id) {
+        await Company.findByIdAndUpdate(contactDoc.company_id, { $addToSet: { contacts: contactDoc._id } });
+      }
     }
     lead.status = 'Converted';
     if (deal) lead.dealId = deal._id;
@@ -275,8 +287,8 @@ async function promote(req, res) {
     // Expected Close Date
     const expectedCloseDate = body.expected_close_date || body.expectedCloseDate || undefined;
 
-    // Owner ID (use body.owner_id or fall back to lead's owner)
-    const targetOwnerId = body.owner_id || lead.owner_id || lead.owner;
+    // Owner ID (use body.owner_id or fall back to lead's owner, then caller's ID)
+    const targetOwnerId = body.owner_id || lead.owner_id || lead.owner || req.user._id;
     
     // Retrieve target owner user to get their name
     const targetOwner = await User.findById(targetOwnerId);
@@ -330,6 +342,8 @@ async function promote(req, res) {
       owner: targetOwnerId,
       owner_id: targetOwnerId,
       source: lead.source,
+      source_lead_id: lead._id,
+      sourceLeadId: lead._id,
       industry: lead.industry,
       city: lead.city,
       closeDate: expectedCloseDate,
@@ -337,6 +351,13 @@ async function promote(req, res) {
       notes: lead.notes ? `From lead: ${lead.notes}` : undefined,
       lastAct: new Date(),
     });
+
+    if (deal.company_id) {
+      await Company.findByIdAndUpdate(deal.company_id, { $addToSet: { deals: deal._id } });
+    }
+    if (contactDoc.company_id) {
+      await Company.findByIdAndUpdate(contactDoc.company_id, { $addToSet: { contacts: contactDoc._id } });
+    }
 
     // Update Lead status to 'Converted' and save Deal ID
     lead.status = 'Converted';
