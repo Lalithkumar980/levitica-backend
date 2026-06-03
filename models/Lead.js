@@ -32,7 +32,7 @@ const LeadSchema = new mongoose.Schema(
     industry: {
       type: String,
       enum: [
-        'Technology',
+        'IT Solutions',
         'Healthcare',
         'Finance',
         'Retail',

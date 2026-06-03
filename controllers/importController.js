@@ -10,7 +10,7 @@ const LEAD_SOURCE_ENUM = [
   'Partner', 'Walk-in', 'Database', 'Social Media', 'Advertisement', 'Other',
 ];
 const LEAD_INDUSTRY_ENUM = [
-  'Technology', 'Healthcare', 'Finance', 'Retail', 'Manufacturing', 'Education',
+  'IT Solutions', 'Healthcare', 'Finance', 'Retail', 'Manufacturing', 'Education',
   'Real Estate', 'Logistics', 'Hospitality', 'Legal', 'Media', 'Other',
 ];
 
