@@ -371,13 +371,13 @@ DealSchema.pre('validate', async function (next) {
   next();
 });
 
-DealSchema.virtual('created_at').get(function() {
+DealSchema.virtual('created_at').get(function () {
   return this.createdAt;
 });
-DealSchema.virtual('updated_at').get(function() {
+DealSchema.virtual('updated_at').get(function () {
   return this.updatedAt;
 });
-DealSchema.virtual('deal_age_days').get(function() {
+DealSchema.virtual('deal_age_days').get(function () {
   if (!this.createdAt) return 0;
   return Math.floor((Date.now() - this.createdAt) / 86400000);
 });
