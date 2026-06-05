@@ -159,20 +159,29 @@ async function buildRawMessage(mailOptions) {
 
 // ─── Resend API sender ─────────────────────────────────────────────────────────
 
-/**
- * Convert nodemailer-style attachments → Resend attachment format.
- * Resend expects: { filename, content (Buffer|string), contentType }
- */
 function convertAttachmentsForResend(attachments) {
   return attachments.map(a => {
-    const obj = {
-      filename:    a.filename || 'attachment',
-      content:     a.content  || a.path,
-      contentType: a.contentType || a.mimetype || 'application/octet-stream',
-    };
-    if (a.cid) {
-      obj.contentId = a.cid;
+    let content = a.content || a.path;
+    
+    // Explicitly convert Buffer to base64 string for Resend API to prevent dropped attachments
+    if (Buffer.isBuffer(content)) {
+      content = content.toString('base64');
     }
+    
+    const obj = {
+      filename: a.filename || 'attachment',
+      content: content,
+    };
+    
+    const type = a.contentType || a.mimetype;
+    if (type) {
+      obj.content_type = type;
+    }
+    
+    if (a.cid) {
+      obj.content_id = a.cid;
+    }
+    
     return obj;
   });
 }

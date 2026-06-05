@@ -85,7 +85,7 @@ async function create(req, res) {
     const payload = ensureOwnerForCreate(req, {
       type: body.type, subject: body.subject, notes: body.notes, date: body.date, duration: body.duration,
       outcome: body.outcome, company: body.company, recording: body.recording, rep: body.rep, dealId: body.dealId,
-      contactId: body.contactId, followupDate: body.followupDate, followupType: body.followupType,
+      contactId: body.contactId, followupDate: body.followupDate, followupType: body.followupType, audioDuration: body.audioDuration,
     }, REP_FIELD);
 
     if (req.file) {
@@ -145,7 +145,7 @@ async function update(req, res) {
     if (!doc) return res.status(404).json({ message: 'Activity not found' });
     if (!canEditRecord(req, doc, REP_FIELD)) return res.status(403).json({ message: 'Access denied to this activity' });
     const body = req.body || {};
-    const allowed = ['type', 'subject', 'notes', 'date', 'duration', 'outcome', 'company', 'recording', 'rep', 'dealId', 'contactId', 'followupDate', 'followupType'];
+    const allowed = ['type', 'subject', 'notes', 'date', 'duration', 'outcome', 'company', 'recording', 'rep', 'dealId', 'contactId', 'followupDate', 'followupType', 'audioDuration'];
     allowed.forEach((key) => { if (body[key] !== undefined) doc[key] = body[key]; });
     
     if (req.file) {

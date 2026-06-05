@@ -3,6 +3,7 @@ const Payment = require("../models/Payment");
 const { recordFinanceActivity } = require("../utils/financeActivity");
 const { sendMail }             = require("../utils/mailer");
 const { buildInvoiceEmail }    = require("../utils/invoiceMailTemplate");
+const { generatePdfBuffer }    = require("../utils/pdfGenerator");
 
 const DEFAULT_GST_RATE = 18;
 
@@ -157,12 +158,24 @@ async function create(req, res) {
     if (recipientEmail) {
       try {
         const { subject, html, text } = buildInvoiceEmail(doc);
+        
+        // Generate PDF
+        console.log(`[invoice] Generating PDF for invoice ${doc.invoiceNo}...`);
+        const pdfBuffer = await generatePdfBuffer(html);
+
         const mailResult = await sendMail({
           to:      recipientEmail,
           subject,
           html,
           text,
           from:    process.env.MAIL_FROM || process.env.SMTP_USER,
+          attachments: [
+            {
+              filename: `Invoice-${doc.invoiceNo}.pdf`,
+              content: pdfBuffer,
+              contentType: 'application/pdf',
+            }
+          ]
         });
         if (mailResult.ok) {
           console.log(`[invoice] ✅ Invoice email sent to ${recipientEmail} for ${doc.invoiceNo}`);

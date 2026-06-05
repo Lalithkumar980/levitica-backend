@@ -54,6 +54,10 @@ const ActivitySchema = new mongoose.Schema(
       type: String,
       default: null,
     }, // Google Drive file ID for audio recording
+    audioDuration: {
+      type: Number,
+      default: null,
+    }, // Extracted duration in seconds from uploaded audio
     rep: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
