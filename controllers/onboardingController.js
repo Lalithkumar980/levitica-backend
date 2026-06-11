@@ -24,7 +24,7 @@ function inviteBaseUrl() {
   return (
     process.env.ONBOARDING_FORM_BASE_URL ||
     process.env.FRONTEND_URL ||
-    'https://levitica-data-management.vercel.app/onboarding'
+    'https://levitica-data-management.vercel.app/document-verification'
   ).replace(/\/$/, '');
 }
 
@@ -91,14 +91,22 @@ async function sendInvite(req, res) {
   let candidateType = bodyHadType ? normalizeInviteCandidateType(typeField) : 'fresher';
 
   let candidateName = 'Candidate';
+  let dbCandidate = null;
   try {
-    const c = await Candidate.findOne({ email }).select('name candidateType expYears exp').lean();
-    if (c?.name) candidateName = c.name;
-    if (!bodyHadType) {
-      if (c?.candidateType === 'experienced') candidateType = 'experienced';
-      else if (c?.candidateType === 'fresher') candidateType = 'fresher';
+    dbCandidate = await Candidate.findOne({ email }).select('name candidateType expYears exp pipelineStage').lean();
+    if (dbCandidate) {
+      candidateName = dbCandidate.name || 'Candidate';
+      if (dbCandidate.pipelineStage !== 'Final Decision') {
+        return res.status(400).json({
+          message: 'Document verification can only be sent to candidates in the Final Decision stage.'
+        });
+      }
+    }
+    if (!bodyHadType && dbCandidate) {
+      if (dbCandidate.candidateType === 'experienced') candidateType = 'experienced';
+      else if (dbCandidate.candidateType === 'fresher') candidateType = 'fresher';
       else {
-        const exp = Number(c?.expYears ?? c?.exp);
+        const exp = Number(dbCandidate.expYears ?? dbCandidate.exp);
         if (Number.isFinite(exp) && exp > 0) candidateType = 'experienced';
       }
     }
@@ -176,6 +184,17 @@ async function sendInvite(req, res) {
       messageId: mail.messageId || null,
     },
   });
+
+  // Update candidate onboarding status to 'Pending'
+  try {
+    const Candidate = require('../models/Candidate');
+    await Candidate.findOneAndUpdate(
+      { email: email.toLowerCase() },
+      { onboarding: 'Pending' }
+    );
+  } catch (syncErr) {
+    console.error('[onboarding] Failed to update onboarding status to Pending on Candidate model:', syncErr);
+  }
 
   return res.status(201).json({
     message: 'Document verification sent',
@@ -276,7 +295,14 @@ async function sendOfferLetter(req, res) {
 
   if (onboardingCandidateId) {
     try {
-      await OnboardingCandidate.findByIdAndUpdate(onboardingCandidateId, { joiningDate, role });
+      const updatedOc = await OnboardingCandidate.findByIdAndUpdate(
+        onboardingCandidateId,
+        { joiningDate, role },
+        { new: true }
+      );
+      if (updatedOc) {
+        await syncCandidateFromOnboarding(updatedOc);
+      }
     } catch (err) {
       console.error('[onboarding] failed to save joining date/role', err);
     }
@@ -390,6 +416,16 @@ async function listSubmissions(req, res) {
       verificationUpdatedByEmail: r.verificationUpdatedByEmail || '',
       documentSlots: Array.isArray(r.documentSlots) ? r.documentSlots : [],
       formData: r.formData || {},
+      joiningDate: r.joiningDate || '',
+      role: r.role || '',
+      joiningStatus: r.joiningStatus || 'Pending',
+      joiningChecklist: r.joiningChecklist || {
+        documentsVerified: false,
+        joiningReportSigned: false,
+        idCardIssued: false,
+        assetAssigned: false,
+        bankDetailsSubmitted: false,
+      },
     }));
     return res.json({ submissions });
   } catch (err) {
@@ -698,6 +734,188 @@ async function updateSubmissionVerification(req, res) {
   });
 }
 
+/**
+ * PATCH /api/onboarding/submissions/:id/joining
+ * Admin/HR: update joining checklist and status.
+ */
+async function updateSubmissionJoining(req, res) {
+  if (!dbReady(res)) return;
+
+  const id = typeof req.params?.id === 'string' ? req.params.id.trim() : '';
+  if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({ message: 'Valid submission id is required' });
+  }
+
+  const { joiningChecklist } = req.body || {};
+  if (!joiningChecklist || typeof joiningChecklist !== 'object') {
+    return res.status(400).json({ message: 'joiningChecklist object is required' });
+  }
+
+  let doc;
+  try {
+    doc = await OnboardingCandidate.findById(id);
+  } catch (err) {
+    console.error('[onboarding] lookup submission for joining update failed', err instanceof Error ? err.message : err);
+    return res.status(500).json({ message: 'Could not update joining checklist' });
+  }
+
+  if (!doc) {
+    return res.status(404).json({ message: 'Submission not found' });
+  }
+
+  // Update checklist items safely
+  const updatedChecklist = {
+    documentsVerified: !!joiningChecklist.documentsVerified,
+    joiningReportSigned: !!joiningChecklist.joiningReportSigned,
+    idCardIssued: !!joiningChecklist.idCardIssued,
+    assetAssigned: !!joiningChecklist.assetAssigned,
+    bankDetailsSubmitted: !!joiningChecklist.bankDetailsSubmitted,
+  };
+
+  doc.joiningChecklist = updatedChecklist;
+
+  // Determine status (Joined if all checked, otherwise Pending)
+  const allCompleted = Object.values(updatedChecklist).every(val => val === true);
+  const oldStatus = doc.joiningStatus || 'Pending';
+  const newStatus = allCompleted ? 'Joined' : 'Pending';
+  doc.joiningStatus = newStatus;
+
+  try {
+    await doc.save();
+    await syncCandidateFromOnboarding(doc);
+  } catch (err) {
+    console.error('[onboarding] save submission joining failed', err instanceof Error ? err.message : err);
+    return res.status(500).json({ message: 'Could not save joining checklist' });
+  }
+
+  // Log activity
+  try {
+    const performedByName = req.user?.name || req.user?.fullName || 'HR Management';
+    if (newStatus === 'Joined' && oldStatus !== 'Joined') {
+      await logHRActivity({
+        candidateId: doc._id.toString(),
+        candidateName: doc.name || 'Candidate',
+        type: 'joining',
+        title: `${doc.name || 'Candidate'} successfully joined the company`,
+        subtitle: `All onboarding operations verified by ${performedByName}`,
+        icon: 'person',
+        performedBy: performedByName,
+        metadata: {
+          submissionId: doc._id.toString(),
+          joiningStatus: newStatus,
+        },
+      });
+    } else {
+      await logHRActivity({
+        candidateId: doc._id.toString(),
+        candidateName: doc.name || 'Candidate',
+        type: 'joining',
+        title: `Joining operations checklist updated for ${doc.name || 'Candidate'}`,
+        subtitle: `Updated by ${performedByName}`,
+        icon: 'shield',
+        performedBy: performedByName,
+        metadata: {
+          submissionId: doc._id.toString(),
+          joiningStatus: newStatus,
+          checklist: updatedChecklist,
+        },
+      });
+    }
+  } catch (logErr) {
+    console.error('[onboarding] failed to log status update activity', logErr);
+  }
+
+  return res.json({
+    message: 'Joining checklist updated',
+    submission: {
+      id: doc._id.toString(),
+      joiningStatus: doc.joiningStatus,
+      joiningChecklist: doc.joiningChecklist,
+    },
+  });
+}
+
+async function syncCandidateFromOnboarding(oc) {
+  try {
+    const Candidate = require('../models/Candidate');
+    const email = String(oc.email).toLowerCase().trim();
+    const updateData = {};
+    
+    if (oc.joiningStatus === 'Joined') {
+      updateData.onboarding = 'Completed';
+      updateData.offer = 'Done';
+    } else {
+      updateData.onboarding = 'Pending';
+      if (oc.joiningDate) {
+        updateData.offer = 'Pending';
+        updateData.joiningDate = oc.joiningDate;
+      } else {
+        updateData.offer = '—';
+      }
+    }
+    
+    if (oc.role) {
+      updateData.position = oc.role;
+    }
+    
+    if (Object.keys(updateData).length > 0) {
+      await Candidate.findOneAndUpdate({ email }, { $set: updateData });
+    }
+  } catch (err) {
+    console.error('[onboarding] Failed to sync candidate state from onboarding:', err);
+  }
+}
+
+async function syncAllOnboardingToCandidates() {
+  try {
+    const Candidate = require('../models/Candidate');
+    const Invitation = require('../models/Invitation');
+    
+    // 1. Sync all invitations to Pending onboarding
+    const invitations = await Invitation.find().lean();
+    console.log(`[sync] Syncing ${invitations.length} invitations...`);
+    for (const inv of invitations) {
+      const email = String(inv.email).toLowerCase().trim();
+      await Candidate.findOneAndUpdate(
+        { email, onboarding: { $ne: 'Completed' } },
+        { $set: { onboarding: 'Pending' } }
+      );
+    }
+    
+    // 2. Sync all onboarding candidates
+    const onboardingCandidates = await OnboardingCandidate.find().lean();
+    console.log(`[sync] Syncing ${onboardingCandidates.length} onboarding candidates to candidates pipeline...`);
+    let count = 0;
+    for (const oc of onboardingCandidates) {
+      const email = String(oc.email).toLowerCase().trim();
+      const updateData = {};
+      
+      if (oc.joiningStatus === 'Joined') {
+        updateData.onboarding = 'Completed';
+        updateData.offer = 'Done';
+      } else {
+        updateData.onboarding = 'Pending';
+        if (oc.joiningDate) {
+          updateData.offer = 'Pending';
+          updateData.joiningDate = oc.joiningDate;
+        }
+      }
+      
+      if (oc.role) {
+        updateData.position = oc.role;
+      }
+      
+      if (Object.keys(updateData).length > 0) {
+        const result = await Candidate.findOneAndUpdate({ email }, { $set: updateData });
+        if (result) count++;
+      }
+    }
+    console.log(`[sync] Successfully synchronized ${count} candidate records.`);
+  } catch (err) {
+    console.error('[sync] Error synchronizing onboarding to candidates:', err);
+  }
+}
+
 module.exports = {
   sendInvite,
   sendOfferLetter,
@@ -705,4 +923,6 @@ module.exports = {
   listSubmissions,
   submitOnboarding,
   updateSubmissionVerification,
+  updateSubmissionJoining,
+  syncAllOnboardingToCandidates,
 };

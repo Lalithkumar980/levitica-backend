@@ -84,9 +84,9 @@ async function getUserStats(req, res) {
     const user = await User.findById(userId).select('name email role').lean();
     if (!user) return res.status(404).json({ message: 'User not found' });
     const [leadsCount, dealsCount, wonDeals, activitiesByType, tasksCount, overdueTasks] = await Promise.all([
-      Lead.countDocuments({ owner: userId }),
-      Deal.countDocuments({ owner: userId }),
-      Deal.find({ owner: userId, stage: 'won' }).select('amount').lean(),
+      Lead.countDocuments({ owner: userId, isDeleted: { $ne: true } }),
+      Deal.countDocuments({ owner: userId, isDeleted: { $ne: true } }),
+      Deal.find({ owner: userId, stage: { $in: ['won', 'Won'] }, isDeleted: { $ne: true } }).select('amount').lean(),
       Activity.aggregate([{ $match: { rep: userId } }, { $group: { _id: '$type', count: { $sum: 1 } } }]),
       Task.countDocuments({ rep: userId }),
       Task.countDocuments({ rep: userId, status: 'Pending', dueDate: { $lt: new Date() } }),

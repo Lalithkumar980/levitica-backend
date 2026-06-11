@@ -1,5 +1,9 @@
 const Deal = require('../models/Deal');
 const Company = require('../models/Company');
+const Contact = require('../models/Contact');
+const Task = require('../models/Task');
+const Activity = require('../models/Activity');
+const Lead = require('../models/Lead');
 const mongoose = require('mongoose');
 const { scopeQueryByRole, ensureOwnerForCreate, canEditRecord, isRep } = require('../middleware/roles');
 const { toCSV } = require('../utils/csvExport');
@@ -273,10 +277,28 @@ async function remove(req, res) {
   try {
     const doc = await Deal.findById(req.params.id);
     if (!doc) return res.status(404).json({ message: 'Deal not found' });
+
+    const contactId = doc.contact_id || doc.contactId;
+    if (contactId) {
+      await Contact.findByIdAndDelete(contactId);
+    }
+
     const compId = doc.company_id || doc.companyId;
     if (compId) {
-      await Company.findByIdAndUpdate(compId, { $pull: { deals: doc._id } });
+      await Company.findByIdAndDelete(compId);
     }
+
+    // Delete related tasks and activities cleanly (avoiding empty $or matching undefined/null fields)
+    await Task.deleteMany({ dealId: doc._id });
+    await Activity.deleteMany({ dealId: doc._id });
+    if (contactId) {
+      await Task.deleteMany({ contactId });
+      await Activity.deleteMany({ contactId });
+    }
+
+    // Revert status of any associated lead to 'New' and clear the dealId reference
+    await Lead.updateMany({ dealId: doc._id }, { $set: { status: 'New' }, $unset: { dealId: 1 } });
+
     doc.isDeleted = true;
     await doc.save();
     res.json({ message: 'Deal deleted', id: doc._id });

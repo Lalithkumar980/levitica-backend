@@ -11,6 +11,14 @@ const trainingFeeSchema = new mongoose.Schema(
     date: { type: Date, default: null },
     referredBy: { type: String, default: '', trim: true },
     notes: { type: String, default: '', trim: true },
+    paymentProofs: [
+      {
+        fileId: { type: String, default: '' },
+        fileUrl: { type: String, default: '' },
+        fileName: { type: String, default: '' },
+        uploadedAt: { type: Date, default: Date.now },
+      }
+    ],
   },
   { timestamps: true }
 );

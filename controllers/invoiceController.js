@@ -1,5 +1,6 @@
 const Invoice = require("../models/Invoice");
 const Payment = require("../models/Payment");
+const User = require("../models/User");
 const { recordFinanceActivity } = require("../utils/financeActivity");
 const { sendMail }             = require("../utils/mailer");
 const { buildInvoiceEmail }    = require("../utils/invoiceMailTemplate");
@@ -157,7 +158,22 @@ async function create(req, res) {
     const recipientEmail = (body.clientEmail || '').trim();
     if (recipientEmail) {
       try {
-        const { subject, html, text } = buildInvoiceEmail(doc);
+        // Find company logo from the Admin profile
+        let companyLogoUrl = null;
+        try {
+          const adminUser = await User.findOne({ role: "Admin" });
+          if (adminUser) {
+            if (adminUser.companyLogo && adminUser.companyLogo.startsWith("http")) {
+              companyLogoUrl = adminUser.companyLogo;
+            } else if (adminUser.companyLogoFileId) {
+              companyLogoUrl = `https://lh3.googleusercontent.com/d/${adminUser.companyLogoFileId}=s400`;
+            }
+          }
+        } catch (logoErr) {
+          console.error("[invoice] Failed to fetch admin company logo:", logoErr.message || logoErr);
+        }
+
+        const { subject, html, text } = buildInvoiceEmail(doc, companyLogoUrl);
         
         // Generate PDF
         console.log(`[invoice] Generating PDF for invoice ${doc.invoiceNo}...`);

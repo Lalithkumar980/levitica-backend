@@ -111,6 +111,7 @@ router.post('/', async (req, res) => {
       date: parseDate(body.date),
       referredBy: (body.referredBy || '').trim(),
       notes: (body.notes || '').trim(),
+      paymentProofs: Array.isArray(body.paymentProofs) ? body.paymentProofs : [],
     });
     res.status(201).json(addBalance(doc));
   } catch (err) {
@@ -141,6 +142,9 @@ router.put('/:id', async (req, res) => {
     if (body.date !== undefined) set.date = parseDate(body.date);
     if (body.referredBy !== undefined) set.referredBy = String(body.referredBy).trim();
     if (body.notes !== undefined) set.notes = String(body.notes).trim();
+    if (body.paymentProofs !== undefined) {
+      set.paymentProofs = Array.isArray(body.paymentProofs) ? body.paymentProofs : [];
+    }
     const doc = await TrainingFee.findByIdAndUpdate(req.params.id, { $set: set }, { new: true });
     if (!doc) return res.status(404).json({ message: 'Record not found' });
     res.json(addBalance(doc));

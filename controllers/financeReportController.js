@@ -19,6 +19,33 @@ async function dashboard(req, res) {
     const outstanding = outstandingAgg[0]?.total ?? 0;
     const totalExpenses = expenseAgg[0]?.total ?? 0;
     const netPnl = totalCollected - totalExpenses;
+
+    // Calculate dynamic overdue amount
+    const now = new Date();
+    const unpaidInvoices = await Invoice.find({
+      status: { $in: ['Pending', 'Overdue', 'Partial'] },
+      dueDate: { $lt: now }
+    }).lean();
+
+    const overdueInvoiceNos = unpaidInvoices.map(i => i.invoiceNo).filter(Boolean);
+    let overduePaidMap = {};
+    if (overdueInvoiceNos.length > 0) {
+      const overdueAggs = await Payment.aggregate([
+        { $match: { invoiceRef: { $in: overdueInvoiceNos } } },
+        { $group: { _id: "$invoiceRef", totalPaid: { $sum: "$amount" } } }
+      ]);
+      overduePaidMap = overdueAggs.reduce((acc, a) => {
+        acc[a._id] = a.totalPaid;
+        return acc;
+      }, {});
+    }
+
+    const overdue = unpaidInvoices.reduce((sum, inv) => {
+      const paid = overduePaidMap[inv.invoiceNo] ?? 0;
+      const outstandingVal = Math.max(0, inv.total - paid);
+      return sum + outstandingVal;
+    }, 0);
+
     const recentActivity = [];
     recentPayments.forEach((p) => {
       recentActivity.push({
@@ -47,6 +74,7 @@ async function dashboard(req, res) {
       totalExpenses,
       netPnl,
       invoiceCount,
+      overdue,
       recentActivity: recentActivity.slice(0, 10),
     });
   } catch (err) {

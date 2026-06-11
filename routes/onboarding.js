@@ -9,6 +9,7 @@ const {
   listSubmissions,
   submitOnboarding,
   updateSubmissionVerification,
+  updateSubmissionJoining,
 } = require('../controllers/onboardingController');
 
 const router = express.Router();
@@ -27,6 +28,9 @@ router.get('/submissions', verifyToken, adminOrHRManagement, asyncHandler(listSu
 
 /** Admin/HR: update document verification status */
 router.patch('/submissions/:id/status', verifyToken, adminOrHRManagement, asyncHandler(updateSubmissionVerification));
+
+/** Admin/HR: update joining checklist and status */
+router.patch('/submissions/:id/joining', verifyToken, adminOrHRManagement, asyncHandler(updateSubmissionJoining));
 
 /** Public: submit form + files */
 router.post('/submit', runOnboardingUpload, asyncHandler(submitOnboarding));

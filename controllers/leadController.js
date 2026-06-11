@@ -88,7 +88,7 @@ async function create(req, res) {
     const payload = ensureOwnerForCreate(req, {
       fname: body.fname, lname: body.lname, name: body.name, company: body.company, company_id: body.company_id, phone: body.phone, email: body.email,
       industry: body.industry, city: body.city, country: body.country, source: body.source,
-      status: body.status, owner: body.owner, owner_id: body.owner_id, notes: body.notes,
+      status: body.status, owner: body.owner || body.owner_id, owner_id: body.owner_id || body.owner, notes: body.notes,
       jobTitle: body.jobTitle, title: body.title, techStack: body.techStack, tech_stack: body.tech_stack,
       heatLevel: body.heatLevel, heat: body.heat,
       leadScore: body.leadScore, score: body.score, estimatedValue: body.estimatedValue, value: body.value,
@@ -132,10 +132,27 @@ async function update(req, res) {
     if (!canEditRecord(req, doc)) return res.status(403).json({ message: 'Access denied to this lead' });
     const body = req.body || {};
     
-    // If status is being changed from Converted to something else, remove the associated deal
+    // If status is being changed from Converted to something else, remove the associated deal and its tasks/activities/contact/company
     if (body.status !== undefined && body.status !== 'Converted' && doc.status === 'Converted' && doc.dealId) {
       try {
-        await Deal.findByIdAndDelete(doc.dealId);
+        const deal = await Deal.findById(doc.dealId);
+        if (deal) {
+          const contactId = deal.contact_id || deal.contactId;
+          const compId = deal.company_id || deal.companyId;
+          if (contactId) {
+            await Contact.findByIdAndDelete(contactId);
+          }
+          if (compId) {
+            await Company.findByIdAndDelete(compId);
+          }
+          await Task.deleteMany({ dealId: deal._id });
+          await Activity.deleteMany({ dealId: deal._id });
+          if (contactId) {
+            await Task.deleteMany({ contactId });
+            await Activity.deleteMany({ contactId });
+          }
+          await Deal.findByIdAndDelete(deal._id);
+        }
       } catch (err) {
         console.error('Failed to auto-delete deal on status revert:', err);
       }
@@ -166,10 +183,28 @@ async function remove(req, res) {
     const doc = await Lead.findById(req.params.id);
     if (!doc) return res.status(404).json({ message: 'Lead not found' });
     
-    // Also soft-delete the associated deal if deleted lead was converted
+    // Also soft-delete the associated deal and cleanup tasks/activities/contact/company if deleted lead was converted
     if (doc.dealId) {
       try {
-        await Deal.findByIdAndUpdate(doc.dealId, { isDeleted: true });
+        const deal = await Deal.findById(doc.dealId);
+        if (deal) {
+          const contactId = deal.contact_id || deal.contactId;
+          const compId = deal.company_id || deal.companyId;
+          if (contactId) {
+            await Contact.findByIdAndDelete(contactId);
+          }
+          if (compId) {
+            await Company.findByIdAndDelete(compId);
+          }
+          await Task.deleteMany({ dealId: deal._id });
+          await Activity.deleteMany({ dealId: deal._id });
+          if (contactId) {
+            await Task.deleteMany({ contactId });
+            await Activity.deleteMany({ contactId });
+          }
+          deal.isDeleted = true;
+          await deal.save();
+        }
       } catch (err) {
         console.error('Failed to auto-soft-delete deal on lead deletion:', err);
       }

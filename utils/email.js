@@ -81,38 +81,23 @@ async function sendOnboardingInvite({ to, inviteUrl, candidateName, expiresAt, c
   `;
 
   // Fetch Admin branding configuration
-  let logoAttachment = null;
-  const defaultLogoPath = path.join(__dirname, '../assets/Images/Levitica.png');
-
+  let companyLogoUrl = null;
   try {
     const admin = await User.findOne({ role: 'Admin' }).lean();
-    if (admin && admin.companyLogoFileId) {
-      try {
-        const drive = await getDriveClient();
-        const response = await drive.files.get({
-          fileId: admin.companyLogoFileId,
-          alt: 'media'
-        }, { responseType: 'arraybuffer' });
-
-        logoAttachment = {
-          filename: 'logo.png',
-          content: Buffer.from(response.data),
-          cid: 'companylogo',
-        };
-      } catch (logoErr) {
-        console.error('[email] Failed to fetch custom logo from Google Drive:', logoErr);
+    if (admin) {
+      if (admin.companyLogo && admin.companyLogo.startsWith("http")) {
+        companyLogoUrl = admin.companyLogo;
+      } else if (admin.companyLogoFileId) {
+        companyLogoUrl = `https://lh3.googleusercontent.com/d/${admin.companyLogoFileId}=s400`;
       }
     }
   } catch (dbErr) {
     console.error('[email] Failed to query Admin user for branding:', dbErr);
   }
 
-  if (!logoAttachment) {
-    logoAttachment = {
-      filename: 'logo.png',
-      content: fs.readFileSync(defaultLogoPath),
-      cid: 'companylogo',
-    };
+  if (!companyLogoUrl) {
+    const frontendUrl = (process.env.FRONTEND_URL || 'https://levitica-data-management.vercel.app').replace(/\/$/, '');
+    companyLogoUrl = `${frontendUrl}/assets/images/Levitica.png`;
   }
 
   const text = [
@@ -162,7 +147,7 @@ async function sendOnboardingInvite({ to, inviteUrl, candidateName, expiresAt, c
     <p>We look forward to receiving your submission and welcoming you to Levitica Technologies Pvt Ltd.</p>
     <p>BEST REGARDS,</p>
     <p style="text-align: left;">
-      <img src="cid:companylogo" alt="Company Logo" width="130" style="border: none; display: inline-block; pointer-events: none; user-select: none;" />
+      <img src="${companyLogoUrl}" alt="Company Logo" width="130" style="border: none; display: inline-block; pointer-events: none; user-select: none;" />
     </p>
     <p>
       HR Team<br/>
@@ -181,7 +166,6 @@ async function sendOnboardingInvite({ to, inviteUrl, candidateName, expiresAt, c
         'Complete your document verification',
       text,
       html,
-      attachments: [logoAttachment],
     });
 
     if (!result.ok) {
@@ -228,38 +212,23 @@ async function sendOfferLetterEmail({
     'Offer Letter | Levitica Technologies Pvt. Ltd.';
 
   // Fetch Admin branding configuration
-  let logoAttachment = null;
-  const defaultLogoPath = path.join(__dirname, '../assets/Images/Levitica.png');
-
+  let companyLogoUrl = null;
   try {
     const admin = await User.findOne({ role: 'Admin' }).lean();
-    if (admin && admin.companyLogoFileId) {
-      try {
-        const drive = await getDriveClient();
-        const response = await drive.files.get({
-          fileId: admin.companyLogoFileId,
-          alt: 'media'
-        }, { responseType: 'arraybuffer' });
-
-        logoAttachment = {
-          filename: 'logo.png',
-          content: Buffer.from(response.data),
-          cid: 'companylogo',
-        };
-      } catch (logoErr) {
-        console.error('[email] Failed to fetch custom logo from Google Drive:', logoErr);
+    if (admin) {
+      if (admin.companyLogo && admin.companyLogo.startsWith("http")) {
+        companyLogoUrl = admin.companyLogo;
+      } else if (admin.companyLogoFileId) {
+        companyLogoUrl = `https://lh3.googleusercontent.com/d/${admin.companyLogoFileId}=s400`;
       }
     }
   } catch (dbErr) {
     console.error('[email] Failed to query Admin user for branding:', dbErr);
   }
 
-  if (!logoAttachment) {
-    logoAttachment = {
-      filename: 'logo.png',
-      content: fs.readFileSync(defaultLogoPath),
-      cid: 'companylogo',
-    };
+  if (!companyLogoUrl) {
+    const frontendUrl = (process.env.FRONTEND_URL || 'https://levitica-data-management.vercel.app').replace(/\/$/, '');
+    companyLogoUrl = `${frontendUrl}/assets/images/Levitica.png`;
   }
 
   const text = [
@@ -307,7 +276,7 @@ async function sendOfferLetterEmail({
     <p>We look forward to welcoming you to the Levitica family and beginning an exciting journey of growth and innovation together.</p>
     <p>BEST REGARDS,</p>
     <p style="text-align: left;">
-      <img src="cid:companylogo" alt="Company Logo" width="130" style="border: none; display: inline-block; pointer-events: none; user-select: none;" />
+      <img src="${companyLogoUrl}" alt="Company Logo" width="130" style="border: none; display: inline-block; pointer-events: none; user-select: none;" />
     </p>
     <p>
       HR Team<br/>
@@ -333,7 +302,7 @@ async function sendOfferLetterEmail({
       subject,
       text,
       html,
-      attachments: [logoAttachment, ...normalizedAttachments],
+      attachments: normalizedAttachments,
     });
 
     if (!result.ok) {

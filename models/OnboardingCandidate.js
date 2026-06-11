@@ -43,6 +43,19 @@ const onboardingCandidateSchema = new mongoose.Schema(
     formData: { type: mongoose.Schema.Types.Mixed, default: {} },
     joiningDate: { type: String, default: '' },
     role: { type: String, default: '' },
+    joiningStatus: {
+      type: String,
+      enum: ['Pending', 'Joined'],
+      default: 'Pending',
+      index: true,
+    },
+    joiningChecklist: {
+      documentsVerified: { type: Boolean, default: false },
+      joiningReportSigned: { type: Boolean, default: false },
+      idCardIssued: { type: Boolean, default: false },
+      assetAssigned: { type: Boolean, default: false },
+      bankDetailsSubmitted: { type: Boolean, default: false },
+    },
     invitationToken: { type: String, default: null },
   },
   { timestamps: true }

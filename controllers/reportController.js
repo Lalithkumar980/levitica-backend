@@ -6,18 +6,18 @@ const User = require('../models/User');
 const { scopeQueryByRole, canViewAll, requireManagerOrAdmin } = require('../middleware/roles');
 
 const REP_FIELD = 'rep';
-const STAGE_ORDER = ['meeting', 'proposal', 'negotiation', 'won', 'lost'];
-const ACTIVE_STAGES = STAGE_ORDER.filter((s) => s !== 'won' && s !== 'lost');
+const STAGE_ORDER = ['Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost'];
+const ACTIVE_STAGES = ['qualified', 'Qualified', 'meeting', 'Proposal', 'proposal', 'negotiation', 'Negotiation'];
 
 async function dashboard(req, res) {
   try {
-    const leadFilter = scopeQueryByRole(req, {});
-    const dealFilter = scopeQueryByRole(req, {});
+    const leadFilter = scopeQueryByRole(req, { isDeleted: { $ne: true } });
+    const dealFilter = scopeQueryByRole(req, { isDeleted: { $ne: true } });
     const activityFilter = scopeQueryByRole(req, {}, REP_FIELD);
     const taskFilter = scopeQueryByRole(req, {}, REP_FIELD);
     const [totalLeads, wonDeals, pipelineDeals, activityCount, overdueTasks] = await Promise.all([
       Lead.countDocuments(leadFilter),
-      Deal.find({ ...dealFilter, stage: 'won' }).select('amount').lean(),
+      Deal.find({ ...dealFilter, stage: { $in: ['won', 'Won'] } }).select('amount').lean(),
       Deal.find({ ...dealFilter, stage: { $in: ACTIVE_STAGES } }).select('amount').lean(),
       Activity.countDocuments(activityFilter),
       Task.countDocuments({ ...taskFilter, status: 'Pending', dueDate: { $lt: new Date() } }),
@@ -25,7 +25,7 @@ async function dashboard(req, res) {
     const wonRevenue = wonDeals.reduce((s, d) => s + (Number(d.amount) || 0), 0);
     const pipelineValue = pipelineDeals.reduce((s, d) => s + (Number(d.amount) || 0), 0);
     const wonCount = wonDeals.length;
-    const lostCount = await Deal.countDocuments({ ...dealFilter, stage: 'lost' });
+    const lostCount = await Deal.countDocuments({ ...dealFilter, stage: { $in: ['lost', 'Lost'] } });
     const closedCount = wonCount + lostCount;
     const winRate = closedCount > 0 ? Math.round((wonCount / closedCount) * 100) : 0;
     res.json({
@@ -39,7 +39,7 @@ async function dashboard(req, res) {
 
 async function pipeline(req, res) {
   try {
-    const dealFilter = scopeQueryByRole(req, {});
+    const dealFilter = scopeQueryByRole(req, { isDeleted: { $ne: true } });
     const groups = await Deal.aggregate([
       { $match: dealFilter },
       { $group: { _id: '$stage', count: { $sum: 1 }, totalValue: { $sum: '$amount' } } },
@@ -47,10 +47,19 @@ async function pipeline(req, res) {
     const byStage = {};
     STAGE_ORDER.forEach((s) => (byStage[s] = { stage: s, count: 0, totalValue: 0 }));
     groups.forEach((g) => {
-      if (byStage[g._id]) {
-        byStage[g._id].count = g.count;
-        byStage[g._id].totalValue = g.totalValue;
-      } else byStage[g._id] = { stage: g._id, count: g.count, totalValue: g.totalValue };
+      let stageName = g._id || 'Qualified';
+      if (stageName.toLowerCase() === 'qualified') stageName = 'Qualified';
+      else if (stageName.toLowerCase() === 'meeting' || stageName.toLowerCase() === 'proposal') stageName = 'Proposal';
+      else if (stageName.toLowerCase() === 'negotiation') stageName = 'Negotiation';
+      else if (stageName.toLowerCase() === 'won') stageName = 'Won';
+      else if (stageName.toLowerCase() === 'lost') stageName = 'Lost';
+
+      if (byStage[stageName]) {
+        byStage[stageName].count += g.count;
+        byStage[stageName].totalValue += g.totalValue;
+      } else {
+        byStage[stageName] = { stage: stageName, count: g.count, totalValue: g.totalValue };
+      }
     });
     res.json({ pipeline: STAGE_ORDER.map((stage) => byStage[stage]) });
   } catch (err) {
@@ -66,10 +75,10 @@ async function repPerformance(req, res) {
       reps.map(async (rep) => {
         const repId = rep._id;
         const [deals, wonDeals, pipelineDeals, lostDeals, calls, emails] = await Promise.all([
-          Deal.find({ owner: repId }).select('amount stage').lean(),
-          Deal.find({ owner: repId, stage: 'won' }).select('amount').lean(),
-          Deal.find({ owner: repId, stage: { $in: ACTIVE_STAGES } }).select('amount').lean(),
-          Deal.countDocuments({ owner: repId, stage: 'lost' }),
+          Deal.find({ owner: repId, isDeleted: { $ne: true } }).select('amount stage').lean(),
+          Deal.find({ owner: repId, stage: { $in: ['won', 'Won'] }, isDeleted: { $ne: true } }).select('amount').lean(),
+          Deal.find({ owner: repId, stage: { $in: ACTIVE_STAGES }, isDeleted: { $ne: true } }).select('amount').lean(),
+          Deal.countDocuments({ owner: repId, stage: { $in: ['lost', 'Lost'] }, isDeleted: { $ne: true } }),
           Activity.countDocuments({ rep: repId, type: 'Call' }),
           Activity.countDocuments({ rep: repId, type: 'Email' }),
         ]);
@@ -93,7 +102,7 @@ async function repPerformance(req, res) {
 
 async function forecast(req, res) {
   try {
-    const deals = await Deal.find({ stage: { $in: ACTIVE_STAGES } }).select('amount prob').lean();
+    const deals = await Deal.find({ stage: { $in: ACTIVE_STAGES }, isDeleted: { $ne: true } }).select('amount prob').lean();
     const weighted = deals.reduce(
       (s, d) => s + (Number(d.amount) || 0) * ((Number(d.prob) || 0) / 100),
       0
@@ -107,7 +116,7 @@ async function forecast(req, res) {
 
 async function leadsBySource(req, res) {
   try {
-    const leadFilter = scopeQueryByRole(req, {});
+    const leadFilter = scopeQueryByRole(req, { isDeleted: { $ne: true } });
     const groups = await Lead.aggregate([
       { $match: leadFilter },
       { $group: { _id: '$source', count: { $sum: 1 } } },

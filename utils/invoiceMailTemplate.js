@@ -32,7 +32,7 @@ function formatDate(value) {
  * @param {object} invoice  - Mongoose Invoice document (or plain object)
  * @returns {{ subject: string, html: string, text: string }}
  */
-function buildInvoiceEmail(invoice) {
+function buildInvoiceEmail(invoice, logoUrl = null) {
   const {
     invoiceNo   = 'INV-00000',
     client      = 'Valued Client',
@@ -103,12 +103,24 @@ function buildInvoiceEmail(invoice) {
 
     <!-- HEADER -->
     <div class="header">
-      <div class="logo-row">
-        <div class="logo-box"><span>L</span></div>
-        <div>
-          <div class="brand">Levitica Technologies<small>Pvt. Ltd.</small></div>
-        </div>
-      </div>
+      <!-- LOGO ROW -->
+      <table border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 20px; border-collapse: collapse;">
+        <tr>
+          <td valign="middle" style="padding-right: 12px; vertical-align: middle;">
+            ${logoUrl ? `
+              <img src="${logoUrl}" alt="Logo" style="display: block; max-height: 42px; max-width: 120px; object-fit: contain; border-radius: 6px;" />
+            ` : `
+              <div class="logo-box"><span>L</span></div>
+            `}
+          </td>
+          <td valign="middle" style="vertical-align: middle;">
+            <div class="brand">
+              Levitica Technologies
+              <small>Pvt. Ltd.</small>
+            </div>
+          </td>
+        </tr>
+      </table>
       <div class="invoice-badge">Invoice</div>
       <h1>${invoiceNo}</h1>
       <p>Issued on ${formatDate(invoiceDate)}</p>

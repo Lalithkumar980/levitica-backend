@@ -369,6 +369,14 @@ app.use((err, req, res, next) => {
 async function start() {
   await connectDB();
 
+  // Run onboarding synchronization
+  try {
+    const { syncAllOnboardingToCandidates } = require("./controllers/onboardingController");
+    await syncAllOnboardingToCandidates();
+  } catch (syncErr) {
+    console.error("Failed to run onboarding candidates sync:", syncErr);
+  }
+
   // Create HTTP server from express app so we can share the port with WebSocket
   const server = http.createServer(app);
 

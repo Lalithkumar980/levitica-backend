@@ -14,29 +14,12 @@ const puppeteer = require('puppeteer');
  */
 async function generatePdfBuffer(html) {
   let browser = null;
-  const fs = require('fs');
-  
-  // Try to find local Chrome or Edge if default puppeteer fails
-  const commonPaths = [
-    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
-  ];
-  let executablePath = undefined;
-  for (const p of commonPaths) {
-    if (fs.existsSync(p)) {
-      executablePath = p;
-      break;
-    }
-  }
-
   try {
     // Launch a headless browser instance
     console.log('[pdfGenerator] Launching browser...');
     browser = await puppeteer.launch({
       headless: 'new', // Use the new headless mode
-      executablePath: executablePath, // Use local browser if found, to prevent Chromium download issues
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'], 
+      args: ['--no-sandbox', '--disable-setuid-sandbox'], // Recommended for server environments
     });
     console.log('[pdfGenerator] Browser launched successfully.');
     const page = await browser.newPage();
