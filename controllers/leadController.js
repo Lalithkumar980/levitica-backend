@@ -87,7 +87,7 @@ async function create(req, res) {
     const body = req.body || {};
     const payload = ensureOwnerForCreate(req, {
       fname: body.fname, lname: body.lname, name: body.name, company: body.company, company_id: body.company_id, phone: body.phone, email: body.email,
-      industry: body.industry, department: body.department, city: body.city, country: body.country, source: body.source,
+      industry: body.industry, department: body.department, companySize: body.companySize, city: body.city, country: body.country, source: body.source,
       status: body.status, owner: body.owner || body.owner_id, owner_id: body.owner_id || body.owner, notes: body.notes,
       jobTitle: body.jobTitle, title: body.title, techStack: body.techStack, tech_stack: body.tech_stack,
       heatLevel: body.heatLevel, heat: body.heat,
@@ -160,7 +160,7 @@ async function update(req, res) {
     }
 
     const allowed = [
-      'fname', 'lname', 'name', 'company', 'company_id', 'phone', 'email', 'industry', 'department', 'city', 'country', 'source', 'status', 'notes', 'owner', 'owner_id',
+      'fname', 'lname', 'name', 'company', 'company_id', 'phone', 'email', 'industry', 'department', 'companySize', 'city', 'country', 'source', 'status', 'notes', 'owner', 'owner_id',
       'jobTitle', 'title', 'techStack', 'tech_stack', 'heatLevel', 'heat', 'leadScore', 'score', 'estimatedValue', 'value', 'lastContacted', 'last_contacted_at'
     ];
     allowed.forEach((key) => { if (body[key] !== undefined) doc[key] = body[key]; });
@@ -245,12 +245,18 @@ async function convert(req, res) {
           owner: ownerId,
           owner_id: ownerId,
           source: lead.source,
-          status: 'Prospect',
-          type: 'Prospect',
+          status: body.contactStatus || 'Prospect',
+          type: body.contactStatus || 'Prospect',
           department: lead.department || undefined,
         });
-      } else if (!contactDoc.department && lead.department) {
-        contactDoc.department = lead.department;
+      } else {
+        if (body.contactStatus) {
+          contactDoc.status = body.contactStatus;
+          contactDoc.type = body.contactStatus;
+        }
+        if (!contactDoc.department && lead.department) {
+          contactDoc.department = lead.department;
+        }
         await contactDoc.save();
       }
 
@@ -287,6 +293,9 @@ async function convert(req, res) {
       if (contactDoc.company_id) {
         await Company.findByIdAndUpdate(contactDoc.company_id, { $addToSet: { contacts: contactDoc._id } });
       }
+    }
+    if (req.body?.companySize) {
+      lead.companySize = req.body.companySize;
     }
     lead.status = 'Converted';
     if (deal) lead.dealId = deal._id;
@@ -358,12 +367,18 @@ async function promote(req, res) {
         owner: targetOwnerId,
         owner_id: targetOwnerId,
         source: lead.source,
-        status: 'Prospect',
-        type: 'Prospect',
+        status: body.contactStatus || body.contact_status || 'Prospect',
+        type: body.contactStatus || body.contact_status || 'Prospect',
         department: lead.department || undefined,
       });
-    } else if (!contactDoc.department && lead.department) {
-      contactDoc.department = lead.department;
+    } else {
+      if (body.contactStatus || body.contact_status) {
+        contactDoc.status = body.contactStatus || body.contact_status;
+        contactDoc.type = body.contactStatus || body.contact_status;
+      }
+      if (!contactDoc.department && lead.department) {
+        contactDoc.department = lead.department;
+      }
       await contactDoc.save();
     }
 

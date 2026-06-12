@@ -45,6 +45,11 @@ const LeadSchema = new mongoose.Schema(
       type: String,
       enum: ['Engineering', 'Product', 'IT', 'Procurement', 'C-Suite', 'Operations'],
     },
+    companySize: {
+      type: String,
+      enum: ['Enterprise', 'Mid-market', 'SMB', 'Startup'],
+      default: 'SMB',
+    },
     city: {
       type: String,
     },
@@ -248,17 +253,26 @@ LeadSchema.pre('validate', async function (next) {
     if (this.isModified('company_id') && this.company_id) {
       const comp = await Company.findById(this.company_id);
       if (comp) this.company = comp.name;
-    } else if (this.isModified('company') && this.company) {
+        } else if (this.isModified('company') && this.company) {
       let comp = await Company.findOne({ name: new RegExp('^' + this.company.trim() + '$', 'i') });
       if (!comp) {
         comp = await Company.create({
           name: this.company.trim(),
           owner: this.owner || this.owner_id,
           industry: this.industry || undefined,
+          companySize: this.companySize || 'SMB',
         });
-      } else if (!comp.industry && this.industry) {
-        comp.industry = this.industry;
-        await comp.save();
+      } else {
+        let changed = false;
+        if (!comp.industry && this.industry) {
+          comp.industry = this.industry;
+          changed = true;
+        }
+        if (this.companySize && comp.companySize !== this.companySize) {
+          comp.companySize = this.companySize;
+          changed = true;
+        }
+        if (changed) await comp.save();
       }
       this.company_id = comp._id;
     } else if (!this.company_id && this.company) {
@@ -268,10 +282,19 @@ LeadSchema.pre('validate', async function (next) {
           name: this.company.trim(),
           owner: this.owner || this.owner_id,
           industry: this.industry || undefined,
+          companySize: this.companySize || 'SMB',
         });
-      } else if (!comp.industry && this.industry) {
-        comp.industry = this.industry;
-        await comp.save();
+      } else {
+        let changed = false;
+        if (!comp.industry && this.industry) {
+          comp.industry = this.industry;
+          changed = true;
+        }
+        if (this.companySize && comp.companySize !== this.companySize) {
+          comp.companySize = this.companySize;
+          changed = true;
+        }
+        if (changed) await comp.save();
       }
       this.company_id = comp._id;
     } else if (this.company_id && !this.company) {
