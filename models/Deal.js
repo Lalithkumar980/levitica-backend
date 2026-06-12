@@ -257,7 +257,11 @@ DealSchema.pre('validate', async function (next) {
         comp = await Company.create({
           name: this.company.trim(),
           owner: this.owner || this.owner_id,
+          industry: this.industry || undefined,
         });
+      } else if (!comp.industry && this.industry) {
+        comp.industry = this.industry;
+        await comp.save();
       }
       this.company_id = comp._id;
       this.companyId = comp._id;

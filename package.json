@@ -24,6 +24,8 @@
     "nodemailer": "^6.10.1",
     "resend": "^6.12.3",
     "puppeteer": "^22.6.0",
+    "puppeteer-core": "^22.6.0",
+    "@sparticuz/chromium": "^122.0.0",
     "server.js": "^1.0.0",
     "ws": "^8.18.2",
     "xlsx": "^0.18.5"

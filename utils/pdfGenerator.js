@@ -5,7 +5,17 @@
 
 'use strict';
 
-const puppeteer = require('puppeteer');
+const isWin = process.platform === 'win32';
+
+let puppeteer;
+let chromium;
+
+if (isWin) {
+  puppeteer = require('puppeteer');
+} else {
+  puppeteer = require('puppeteer-core');
+  chromium = require('@sparticuz/chromium');
+}
 
 /**
  * Generate a PDF buffer from an HTML string.
@@ -17,10 +27,21 @@ async function generatePdfBuffer(html) {
   try {
     // Launch a headless browser instance
     console.log('[pdfGenerator] Launching browser...');
-    browser = await puppeteer.launch({
-      headless: 'new', // Use the new headless mode
-      args: ['--no-sandbox', '--disable-setuid-sandbox'], // Recommended for server environments
-    });
+    if (isWin) {
+      browser = await puppeteer.launch({
+        headless: 'new', // Use the new headless mode
+        args: ['--no-sandbox', '--disable-setuid-sandbox'], // Recommended for server environments
+      });
+    } else {
+      // Production Serverless/Cloud setup (Render Linux environment)
+      browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
+      });
+    }
     console.log('[pdfGenerator] Browser launched successfully.');
     const page = await browser.newPage();
     

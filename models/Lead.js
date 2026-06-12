@@ -32,19 +32,18 @@ const LeadSchema = new mongoose.Schema(
     industry: {
       type: String,
       enum: [
-        'IT Solutions',
-        'Healthcare',
-        'Finance',
-        'Retail',
-        'Manufacturing',
-        'Education',
-        'Real Estate',
-        'Logistics',
-        'Hospitality',
-        'Legal',
-        'Media',
-        'Other',
+        'Cloud Infra',
+        'DevOps',
+        'SaaS',
+        'ERP-CRM',
+        'Data Analytics',
+        'IT Services',
+        'Enterprise IT',
       ],
+    },
+    department: {
+      type: String,
+      enum: ['Engineering', 'Product', 'IT', 'Procurement', 'C-Suite', 'Operations'],
     },
     city: {
       type: String,
@@ -255,7 +254,11 @@ LeadSchema.pre('validate', async function (next) {
         comp = await Company.create({
           name: this.company.trim(),
           owner: this.owner || this.owner_id,
+          industry: this.industry || undefined,
         });
+      } else if (!comp.industry && this.industry) {
+        comp.industry = this.industry;
+        await comp.save();
       }
       this.company_id = comp._id;
     } else if (!this.company_id && this.company) {
@@ -264,7 +267,11 @@ LeadSchema.pre('validate', async function (next) {
         comp = await Company.create({
           name: this.company.trim(),
           owner: this.owner || this.owner_id,
+          industry: this.industry || undefined,
         });
+      } else if (!comp.industry && this.industry) {
+        comp.industry = this.industry;
+        await comp.save();
       }
       this.company_id = comp._id;
     } else if (this.company_id && !this.company) {

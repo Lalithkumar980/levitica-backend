@@ -10,8 +10,10 @@ const LEAD_SOURCE_ENUM = [
   'Partner', 'Walk-in', 'Database', 'Social Media', 'Advertisement', 'Other',
 ];
 const LEAD_INDUSTRY_ENUM = [
-  'IT Solutions', 'Healthcare', 'Finance', 'Retail', 'Manufacturing', 'Education',
-  'Real Estate', 'Logistics', 'Hospitality', 'Legal', 'Media', 'Other',
+  'Cloud Infra', 'DevOps', 'SaaS', 'ERP-CRM', 'Data Analytics', 'IT Services', 'Enterprise IT',
+];
+const LEAD_DEPARTMENT_ENUM = [
+  'Engineering', 'Product', 'IT', 'Procurement', 'C-Suite', 'Operations',
 ];
 
 function normHeader(h) {
@@ -30,6 +32,7 @@ const HEADER_MAP = {
   source: ['source', 'lead_source', 'source_type'],
   status: ['status'],
   notes: ['notes', 'note', 'remarks'],
+  department: ['department', 'dept'],
 };
 
 function getRowValue(rowObj, field) {
@@ -49,6 +52,7 @@ function rowObjToLead(rowObj, ownerId) {
   const get = (f) => getRowValue(rowObj, f);
   const source = get('source') || 'Other';
   const industry = get('industry');
+  const department = get('department');
   return {
     fname: get('fname'),
     lname: get('lname'),
@@ -56,6 +60,7 @@ function rowObjToLead(rowObj, ownerId) {
     phone: get('phone'),
     email: get('email') || undefined,
     industry: LEAD_INDUSTRY_ENUM.includes(industry) ? industry : undefined,
+    department: LEAD_DEPARTMENT_ENUM.includes(department) ? department : undefined,
     city: get('city') || undefined,
     country: get('country') || 'India',
     source: LEAD_SOURCE_ENUM.includes(source) ? source : 'Other',
@@ -103,6 +108,7 @@ function rowToLead(row, indices, ownerId) {
   };
   const source = get('source') || 'Other';
   const industry = get('industry');
+  const department = get('department');
   return {
     fname: get('fname'),
     lname: get('lname'),
@@ -110,6 +116,7 @@ function rowToLead(row, indices, ownerId) {
     phone: get('phone'),
     email: get('email') || undefined,
     industry: LEAD_INDUSTRY_ENUM.includes(industry) ? industry : undefined,
+    department: LEAD_DEPARTMENT_ENUM.includes(department) ? department : undefined,
     city: get('city') || undefined,
     country: get('country') || 'India',
     source: LEAD_SOURCE_ENUM.includes(source) ? source : 'Other',
@@ -273,6 +280,7 @@ async function importLeadsBody(req, res) {
       phone: findHeaderIndex(headerRow, 'phone'),
       email: findHeaderIndex(headerRow, 'email'),
       industry: findHeaderIndex(headerRow, 'industry'),
+      department: findHeaderIndex(headerRow, 'department'),
       city: findHeaderIndex(headerRow, 'city'),
       country: findHeaderIndex(headerRow, 'country'),
       source: findHeaderIndex(headerRow, 'source'),
