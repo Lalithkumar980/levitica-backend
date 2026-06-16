@@ -222,8 +222,12 @@ async function download(req, res) {
       { responseType: 'stream' }
     );
 
+    const isDownload = req.query.download === 'true';
     res.setHeader('Content-Type', doc.mimeType || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(doc.name)}"`);
+    res.setHeader(
+      'Content-Disposition',
+      `${isDownload ? 'attachment' : 'inline'}; filename="${encodeURIComponent(doc.name)}"`
+    );
     driveRes.data.pipe(res);
   } catch (err) {
     console.error('Document download error:', err);
