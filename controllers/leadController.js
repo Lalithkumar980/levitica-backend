@@ -7,7 +7,7 @@ const { scopeQueryByRole, ensureOwnerForCreate, canEditRecord, isRep } = require
 const { toCSV } = require('../utils/csvExport');
 
 const LEAD_EXPORT_HEADERS = [
-  'fname', 'lname', 'company', 'phone', 'email', 'industry', 'city', 'country',
+  'fname', 'lname', 'company', 'jobTitle', 'phone', 'email', 'industry', 'city', 'country',
   'source', 'status', 'notes', 'createdAt',
 ];
 
