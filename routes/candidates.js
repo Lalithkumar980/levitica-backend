@@ -1,5 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
+const fs = require('fs');
+const path = require('path');
 const router = express.Router();
 const { authenticate, adminOnly } = require('../middleware/auth');
 const { resumeUpload } = require('../middleware/upload');
@@ -644,6 +646,242 @@ router.delete('/:id', adminOnly, async (req, res) => {
   } catch (err) {
     console.error('Candidate delete error:', err);
     res.status(500).json({ message: err.message || 'Failed to delete candidate' });
+  }
+});
+
+const { PDFParse } = require('pdf-parse');
+const { GoogleGenAI } = require('@google/genai');
+
+function fallbackParse(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  
+  // 1. Email extraction
+  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+  const emails = text.match(emailRegex) || [];
+  const email = emails[0] || '';
+  
+  // 2. Phone extraction
+  const phoneRegex = /(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g;
+  const phones = text.match(phoneRegex) || [];
+  const phone = phones[0] ? phones[0].replace(/[^\d+]/g, '') : '';
+  
+  // 3. Name extraction
+  let name = '';
+  for (const line of lines) {
+    if (line.toLowerCase().includes('resume') || 
+        line.toLowerCase().includes('curriculum') ||
+        line.toLowerCase().includes('cv') ||
+        line.includes('@') ||
+        /\d{5,}/.test(line) ||
+        line.toLowerCase().includes('http') ||
+        line.toLowerCase().includes('www') ||
+        line.length > 50) {
+      continue;
+    }
+    if (/^[A-Za-z\s.]+$/.test(line) && line.split(/\s+/).length >= 2) {
+      name = line;
+      break;
+    }
+  }
+  if (!name && lines.length > 0) {
+    name = lines[0];
+  }
+
+  // 4. Skills extraction
+  let skills = '';
+  const skillsKeywords = ['skills', 'technologies', 'technical skills', 'skills & core competencies', 'core competencies'];
+  let skillsLineIndex = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const lower = lines[i].toLowerCase();
+    if (skillsKeywords.some(keyword => lower === keyword || lower.startsWith(keyword + ':') || lower.startsWith(keyword + ' '))) {
+      skillsLineIndex = i;
+      break;
+    }
+  }
+  if (skillsLineIndex !== -1) {
+    const skillsLines = [];
+    let j = skillsLineIndex + 1;
+    while (j < lines.length && j < skillsLineIndex + 5) {
+      const line = lines[j];
+      if (/^[A-Z\s]{4,20}$/.test(line) || line.toLowerCase().includes('experience') || line.toLowerCase().includes('education')) {
+        break;
+      }
+      skillsLines.push(line);
+      j++;
+    }
+    skills = skillsLines.join(', ');
+  }
+
+  // 5. Degree & College
+  let degree = '';
+  let college = '';
+  const degreeRegex = /(B\.?Tech|M\.?Tech|B\.?S|M\.?S|B\.?E|M\.?E|BCA|MCA|MBA|Ph\.?D|Bachelor|Master)/i;
+  const degMatch = text.match(degreeRegex);
+  if (degMatch) {
+    degree = degMatch[0];
+  }
+  
+  const collegeKeywords = ['university', 'college', 'institute', 'school', 'academy', 'iit', 'nit', 'bits'];
+  for (const line of lines) {
+    const lower = line.toLowerCase();
+    if (collegeKeywords.some(kw => lower.includes(kw))) {
+      college = line;
+      break;
+    }
+  }
+
+  // 6. Year
+  let year = '';
+  const yearRegex = /\b(20\d{2}|19\d{2})\b/g;
+  const years = text.match(yearRegex) || [];
+  if (years.length > 0) {
+    const uniqueYears = [...new Set(years)].map(Number);
+    year = Math.max(...uniqueYears).toString();
+  }
+
+  // 7. Role
+  let role = '';
+  const roleKeywords = ['developer', 'engineer', 'analyst', 'manager', 'consultant', 'designer', 'lead', 'architect'];
+  for (const line of lines) {
+    const lower = line.toLowerCase();
+    if (roleKeywords.some(kw => lower.includes(kw)) && !lower.includes('experience') && !lower.includes('education') && line.length < 50) {
+      role = line;
+      break;
+    }
+  }
+
+  // 8. Experience & Company
+  let exp = '';
+  let company = '';
+  const expRegex = /(\d+(?:\.\d+)?)\s*(?:\+\s*)?years?/i;
+  const expMatch = text.match(expRegex);
+  if (expMatch) {
+    exp = expMatch[1];
+  }
+
+  const companyKeywords = ['ltd', 'inc', 'pvt', 'corp', 'corporation', 'technologies', 'solutions', 'services', 'systems'];
+  for (const line of lines) {
+    const lower = line.toLowerCase();
+    if (companyKeywords.some(kw => lower.includes(kw)) && !lower.includes('resume') && !lower.includes('education') && line.length < 60) {
+      company = line;
+      break;
+    }
+  }
+
+  return {
+    name,
+    email,
+    phone,
+    skills,
+    degree,
+    college,
+    year,
+    role,
+    exp,
+    company
+  };
+}
+
+/** POST /api/candidates/parse-resume — parse uploaded resume (PDF) */
+router.post('/parse-resume', (req, res, next) => {
+  resumeUpload(req, res, (err) => {
+    if (err) return res.status(400).json({ message: err.message || 'Upload failed' });
+    next();
+  });
+}, async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ message: 'No resume file uploaded.' });
+  }
+
+  const filePath = req.file.path;
+
+  try {
+    const ext = path.extname(req.file.originalname || '').toLowerCase();
+    
+    // Check if the file is a PDF
+    if (ext !== '.pdf') {
+      // Clean up the uploaded file
+      try {
+        fs.unlinkSync(filePath);
+      } catch (unlinkErr) {
+        console.error('Failed to delete temporary resume file:', unlinkErr);
+      }
+      return res.status(400).json({ message: 'Only PDF resumes can be auto-parsed. Please fill details manually or upload a PDF.' });
+    }
+
+    // Read file and parse text
+    const fileBuffer = fs.readFileSync(filePath);
+    const pdf = new PDFParse({ data: fileBuffer });
+    const textResult = await pdf.getText();
+    const text = textResult.text || '';
+
+    // Structure variable to hold parsed data
+    let parsedData = {};
+
+    // Try Gemini first if API key is present
+    if (process.env.GEMINI_API_KEY) {
+      try {
+        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        const prompt = `You are an expert resume parser. Analyze the following resume text and extract the candidate's details into a JSON object.
+Do NOT include markdown formatting, backticks, or any conversational text. Return ONLY a single raw JSON object.
+If a field is not found in the resume, leave it as an empty string "".
+
+The output JSON structure MUST be exactly:
+{
+  "name": "Full name of the candidate",
+  "email": "Email address",
+  "phone": "Phone number",
+  "skills": "Comma-separated list of skills",
+  "degree": "Degree (e.g. B.Tech, M.S., etc.)",
+  "college": "Name of the college/university",
+  "year": "Year of graduation (4 digit string, e.g. 2024)",
+  "role": "Current or targeted role",
+  "exp": "Number of years of experience as a number or string",
+  "company": "Current or most recent company"
+}
+
+Resume Text:
+${text}`;
+
+        const aiResponse = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+          }
+        });
+
+        const rawText = aiResponse.text;
+        parsedData = JSON.parse(rawText);
+      } catch (geminiError) {
+        console.error('Gemini parsing failed, using fallback parser:', geminiError.message);
+        parsedData = fallbackParse(text);
+      }
+    } else {
+      console.log('No GEMINI_API_KEY found, using fallback regex parser.');
+      parsedData = fallbackParse(text);
+    }
+
+    // Clean up uploaded file
+    try {
+      fs.unlinkSync(filePath);
+    } catch (unlinkErr) {
+      console.error('Failed to delete temporary resume file:', unlinkErr);
+    }
+
+    res.json(parsedData);
+
+  } catch (err) {
+    console.error('Resume parsing error:', err);
+    // Cleanup file in case of error
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    } catch (unlinkErr) {
+      console.error('Failed to delete temporary resume file on error:', unlinkErr);
+    }
+    res.status(500).json({ message: err.message || 'Failed to parse resume.' });
   }
 });
 
