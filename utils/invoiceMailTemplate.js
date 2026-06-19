@@ -32,7 +32,7 @@ function formatDate(value) {
  * @param {object} invoice  - Mongoose Invoice document (or plain object)
  * @returns {{ subject: string, html: string, text: string }}
  */
-function buildInvoiceEmail(invoice, logoUrl = null) {
+function buildInvoiceEmail(invoice, logoUrl = null, payUrl = null) {
   const {
     invoiceNo   = 'INV-00000',
     client      = 'Valued Client',
@@ -182,6 +182,14 @@ function buildInvoiceEmail(invoice, logoUrl = null) {
         </div>
       </div>` : ''}
 
+      ${payUrl ? `
+      <!-- Pay Now Button -->
+      <div style="text-align: center; margin: 32px 0;">
+        <a href="${payUrl}" style="background: linear-gradient(135deg, #10B981, #059669); color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 12px; font-weight: 700; font-size: 15px; display: inline-block; box-shadow: 0 4px 12px rgba(16,185,129,0.3); transition: all 0.2s ease;">
+          Pay Invoice Online (Stripe)
+        </a>
+      </div>` : ''}
+
       ${description && description !== '-' ? `
       <hr class="divider" />
       <div class="section-title">Description / Notes</div>
@@ -228,6 +236,7 @@ Base Amount   : ${formatINR(baseAmount)}
 GST (${gstRate}%)    : ${formatINR(gst)}
 Total Due     : ${formatINR(total)}
 
+${payUrl ? `Pay this invoice online via Stripe: ${payUrl}\n` : ''}
 ${description && description !== '-' ? `Notes: ${description}\n` : ''}
 For questions, contact: info@leviticatechnologies.com
 Levitica Technologies Pvt. Ltd.

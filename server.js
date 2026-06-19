@@ -274,6 +274,10 @@ const {
   runOfferLetterUpload,
 } = require("./middleware/onboardingUpload");
 const { runDriveMultipart } = require("./middleware/driveUpload");
+const invoiceController = require("./controllers/invoiceController");
+
+app.get("/finance/pay/:invoiceNo", asyncHandler(invoiceController.payInvoice));
+app.get("/finance/stripe/success", asyncHandler(invoiceController.stripeSuccess));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
