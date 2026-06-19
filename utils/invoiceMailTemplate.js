@@ -60,8 +60,8 @@ function buildInvoiceEmail(invoice, logoUrl = null, payUrl = null) {
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Segoe UI', Arial, sans-serif; background: #F1F5F9; color: #1E293B; }
-    .wrapper { max-width: 620px; margin: 32px auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
-    .header { background: linear-gradient(135deg, #0F172A 0%, #1E3A5F 100%); padding: 36px 40px 28px; }
+    .wrapper { max-width: 600px; margin: 20px auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
+    .header { background: linear-gradient(135deg, #0F172A 0%, #1E3A5F 100%); padding: 28px 32px 20px; }
     .logo-row { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
     .logo-box { width: 42px; height: 42px; background: #3B82F6; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
     .logo-box span { color: #fff; font-weight: 900; font-size: 18px; }
@@ -70,32 +70,48 @@ function buildInvoiceEmail(invoice, logoUrl = null, payUrl = null) {
     .invoice-badge { background: rgba(59,130,246,0.18); border: 1px solid rgba(59,130,246,0.35); color: #93C5FD; display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 10px; }
     .header h1 { color: #F8FAFC; font-size: 22px; font-weight: 800; }
     .header p  { color: #94A3B8; font-size: 13px; margin-top: 6px; }
-    .body { padding: 36px 40px; }
+    .body { padding: 28px 32px; }
     .greeting { font-size: 15px; color: #334155; margin-bottom: 8px; }
     .greeting strong { color: #0F172A; }
-    .intro { font-size: 13.5px; color: #64748B; line-height: 1.6; margin-bottom: 28px; }
-    .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 28px; }
-    .meta-item { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 12px 16px; }
-    .meta-item label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #94A3B8; display: block; margin-bottom: 4px; }
-    .meta-item value { font-size: 13px; font-weight: 600; color: #0F172A; }
-    .divider { border: none; border-top: 1px solid #E2E8F0; margin: 24px 0; }
-    .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #94A3B8; margin-bottom: 12px; }
+    .intro { font-size: 13px; color: #64748B; line-height: 1.5; margin-bottom: 20px; }
+    .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+    .meta-item { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 10px 14px; }
+    .meta-item label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #94A3B8; display: block; margin-bottom: 3px; }
+    .meta-item value { font-size: 12.5px; font-weight: 600; color: #0F172A; }
+    .divider { border: none; border-top: 1px solid #E2E8F0; margin: 18px 0; }
+    .section-title { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #94A3B8; margin-bottom: 10px; }
     .amount-table { width: 100%; border-collapse: collapse; }
-    .amount-table td { padding: 9px 0; font-size: 13.5px; color: #475569; }
+    .amount-table td { padding: 8px 0; font-size: 13px; color: #475569; }
     .amount-table td:last-child { text-align: right; font-weight: 600; color: #0F172A; }
-    .amount-table tr.separator td { border-top: 1px dashed #E2E8F0; padding-top: 12px; }
-    .total-row td { font-size: 16px; font-weight: 800; color: #0F172A; padding-top: 14px; }
-    .total-badge { background: linear-gradient(135deg, #1E40AF, #3B82F6); color: #fff; padding: 4px 12px; border-radius: 8px; font-size: 16px; font-weight: 800; }
-    .due-box { background: #FFF7ED; border: 1px solid #FED7AA; border-radius: 12px; padding: 14px 18px; margin: 24px 0; display: flex; align-items: center; gap: 12px; }
-    .due-icon { font-size: 22px; }
-    .due-text label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #9A3412; }
-    .due-text value { font-size: 14px; font-weight: 700; color: #7C2D12; display: block; }
-    .desc-box { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 14px 16px; margin-top: 20px; }
-    .desc-box p { font-size: 13px; color: #475569; line-height: 1.65; }
-    .footer { background: #F8FAFC; border-top: 1px solid #E2E8F0; padding: 24px 40px; text-align: center; }
-    .footer p { font-size: 12px; color: #94A3B8; line-height: 1.7; }
+    .amount-table tr.separator td { border-top: 1px dashed #E2E8F0; padding-top: 10px; }
+    .total-row td { font-size: 15px; font-weight: 800; color: #0F172A; padding-top: 12px; }
+    .total-badge { background: linear-gradient(135deg, #1E40AF, #3B82F6); color: #fff; padding: 4px 12px; border-radius: 8px; font-size: 15px; font-weight: 800; }
+    .due-box { background: #FFF7ED; border: 1px solid #FED7AA; border-radius: 12px; padding: 12px 16px; margin: 18px 0; display: flex; align-items: center; gap: 12px; }
+    .due-icon { font-size: 20px; }
+    .due-text label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #9A3412; }
+    .due-text value { font-size: 13.5px; font-weight: 700; color: #7C2D12; display: block; }
+    .pay-btn-container { text-align: center; margin: 24px 0; }
+    .desc-box { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 12px 14px; margin-top: 16px; }
+    .desc-box p { font-size: 12.5px; color: #475569; line-height: 1.55; }
+    .footer { background: #F8FAFC; border-top: 1px solid #E2E8F0; padding: 18px 32px; text-align: center; }
+    .footer p { font-size: 11.5px; color: #94A3B8; line-height: 1.6; }
     .footer a { color: #3B82F6; text-decoration: none; }
-    .footer .company { font-weight: 700; color: #64748B; font-size: 13px; margin-bottom: 4px; }
+    .footer .company { font-weight: 700; color: #64748B; font-size: 12.5px; margin-bottom: 3px; }
+
+    @media print {
+      body { background: #ffffff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .wrapper { max-width: 100% !important; margin: 0 !important; box-shadow: none !important; border-radius: 0 !important; border: none !important; }
+      .header { padding: 24px 30px 18px !important; }
+      .body { padding: 24px 30px !important; }
+      .footer { padding: 16px 30px !important; }
+      .meta-grid { margin-bottom: 16px !important; gap: 8px !important; }
+      .meta-item { padding: 8px 12px !important; }
+      .divider { margin: 14px 0 !important; }
+      .due-box { margin: 14px 0 !important; padding: 10px 14px !important; }
+      .pay-btn-container { margin: 16px 0 !important; }
+      .desc-box { margin-top: 12px !important; padding: 10px 12px !important; }
+      .intro { margin-bottom: 16px !important; }
+    }
   </style>
 </head>
 <body>
@@ -184,7 +200,7 @@ function buildInvoiceEmail(invoice, logoUrl = null, payUrl = null) {
 
       ${payUrl ? `
       <!-- Pay Now Button -->
-      <div style="text-align: center; margin: 32px 0;">
+      <div class="pay-btn-container">
         <a href="${payUrl}" style="background: linear-gradient(135deg, #10B981, #059669); color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 12px; font-weight: 700; font-size: 15px; display: inline-block; box-shadow: 0 4px 12px rgba(16,185,129,0.3); transition: all 0.2s ease;">
           Pay Invoice Online (Stripe)
         </a>
