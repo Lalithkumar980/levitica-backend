@@ -178,7 +178,8 @@ async function create(req, res) {
       expected_close_date: body.expected_close_date || body.closeDate,
       owner_id: body.owner_id || body.owner,
       last_contacted_at: body.last_contacted_at || body.lastAct || new Date(),
-      lost_reason: body.lost_reason,
+      email: body.email,
+      phone: body.phone,
     });
     if (!payload.owner) payload.owner = req.user._id;
     if (!payload.owner_id) payload.owner_id = req.user._id;
@@ -228,7 +229,8 @@ async function update(req, res) {
     const body = req.body || {};
     const allowed = [
       'title', 'company', 'companyId', 'contactId', 'amount', 'stage', 'prob', 'product', 'owner', 'source', 'industry', 'city', 'closeDate', 'followup', 'notes', 'activities', 'files',
-      'name', 'source_lead_id', 'sourceLeadId', 'company_id', 'contact_id', 'contact', 'value', 'heat', 'heatLevel', 'expected_close_date', 'owner_id', 'last_contacted_at', 'lost_reason'
+      'name', 'source_lead_id', 'sourceLeadId', 'company_id', 'contact_id', 'contact', 'value', 'heat', 'heatLevel', 'expected_close_date', 'owner_id', 'last_contacted_at', 'lost_reason',
+      'email', 'phone'
     ];
     const oldCompanyId = doc.company_id || doc.companyId;
     let stageChanged = false;

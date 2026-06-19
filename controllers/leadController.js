@@ -285,6 +285,8 @@ async function convert(req, res) {
         followup: body.followup || undefined,
         notes: body.notes || (lead.notes ? `From lead: ${lead.notes}` : undefined),
         lastAct: new Date(),
+        email: lead.email || undefined,
+        phone: lead.phone || undefined,
       });
 
       if (deal.company_id) {
@@ -408,6 +410,8 @@ async function promote(req, res) {
       expected_close_date: expectedCloseDate,
       notes: lead.notes ? `From lead: ${lead.notes}` : undefined,
       lastAct: new Date(),
+      email: lead.email || undefined,
+      phone: lead.phone || undefined,
     });
 
     if (deal.company_id) {

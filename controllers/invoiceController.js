@@ -151,6 +151,7 @@ async function create(req, res) {
       paidDate: undefined,
       description:
         body.description != null ? String(body.description).trim() : "",
+      dealId: body.dealId || undefined,
     };
     const doc = await Invoice.create(payload);
 

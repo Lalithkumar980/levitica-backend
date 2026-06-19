@@ -135,6 +135,14 @@ const DealSchema = new mongoose.Schema(
     contact: {
       type: String,
     },
+    email: {
+      type: String,
+      default: '',
+    },
+    phone: {
+      type: String,
+      default: '',
+    },
     value: {
       type: Number,
       required: true,

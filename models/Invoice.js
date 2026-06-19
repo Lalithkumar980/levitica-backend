@@ -65,6 +65,10 @@ const InvoiceSchema = new mongoose.Schema(
     description: {
       type: String,
     },
+    dealId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Deal',
+    },
   },
   { timestamps: true }
 );
