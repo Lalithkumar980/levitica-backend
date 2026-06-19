@@ -94,6 +94,16 @@ async function recalculateInvoiceFromPayments(invoiceRef) {
   }
 
   await invoice.save();
+
+  // If this invoice is linked to a TrainingFee record, sync its paid amount
+  if (invoice.trainingFeeRef) {
+    try {
+      const { syncTrainingFeePayments } = require("./invoiceController");
+      await syncTrainingFeePayments(invoice.trainingFeeRef);
+    } catch (syncErr) {
+      console.error("[Sync] Error calling syncTrainingFeePayments:", syncErr);
+    }
+  }
 }
 
 async function list(req, res) {

@@ -3,6 +3,8 @@ const mongoose = require('mongoose');
 const trainingFeeSchema = new mongoose.Schema(
   {
     candidateName: { type: String, required: true, trim: true },
+    email: { type: String, default: '', lowercase: true, trim: true },
+    phone: { type: String, default: '', trim: true },
     course: { type: String, required: true, trim: true },
     totalFees: { type: Number, required: true, default: 0 },
     paidAmount: { type: Number, default: 0 },

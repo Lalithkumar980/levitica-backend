@@ -103,6 +103,8 @@ router.post('/', async (req, res) => {
     else if (paidAmount > 0) paymentStatus = 'Partial';
     const doc = await TrainingFee.create({
       candidateName: (body.candidateName || '').trim(),
+      email: (body.email || '').trim(),
+      phone: (body.phone || '').trim(),
       course: (body.course || '').trim(),
       totalFees,
       paidAmount,
@@ -134,6 +136,8 @@ router.put('/:id', async (req, res) => {
     }
     const set = {};
     if (body.candidateName !== undefined) set.candidateName = String(body.candidateName).trim();
+    if (body.email !== undefined) set.email = String(body.email).trim();
+    if (body.phone !== undefined) set.phone = String(body.phone).trim();
     if (body.course !== undefined) set.course = String(body.course).trim();
     if (totalFees !== undefined) set.totalFees = totalFees;
     if (paidAmount !== undefined) set.paidAmount = paidAmount;

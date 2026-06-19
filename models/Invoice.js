@@ -69,6 +69,10 @@ const InvoiceSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Deal',
     },
+    trainingFeeRef: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TrainingFee',
+    },
   },
   { timestamps: true }
 );

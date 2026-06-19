@@ -153,6 +153,7 @@ async function create(req, res) {
       description:
         body.description != null ? String(body.description).trim() : "",
       dealId: body.dealId || undefined,
+      trainingFeeRef: body.trainingFeeRef || undefined,
     };
     const doc = await Invoice.create(payload);
 
@@ -502,11 +503,15 @@ async function payInvoice(req, res) {
     }
 
     const payload = {
-      success_url: `${req.protocol}://${req.get("host")}/finance/stripe/success?session_id={CHECKOUT_SESSION_ID}&invoiceNo=${invoice.invoiceNo}`,
+      success_url: `${process.env.BACKEND_URL || `${req.protocol}://${req.get("host")}`}/finance/stripe/success?session_id={CHECKOUT_SESSION_ID}&invoiceNo=${invoice.invoiceNo}`,
       cancel_url: `${process.env.FRONTEND_URL || 'https://levitica-data-management.vercel.app'}/finance/invoices`,
       mode: 'payment',
+      // Explicitly list payment methods to enable UPI (PhonePe, Paytm, Google Pay, BHIM) for India
+      'payment_method_types[0]': 'card',
+      'payment_method_types[1]': 'upi',
       'line_items[0][price_data][currency]': 'inr',
       'line_items[0][price_data][product_data][name]': `Invoice ${invoice.invoiceNo}`,
+      'line_items[0][price_data][product_data][description]': invoice.description || `Payment for Invoice ${invoice.invoiceNo}`,
       'line_items[0][price_data][unit_amount]': Math.round(outstanding * 100), // outstanding in paise
       'line_items[0][quantity]': 1,
       client_reference_id: invoice.invoiceNo,
@@ -564,6 +569,11 @@ async function stripeSuccess(req, res) {
       // Recalculate invoice status and totals
       const { recalculateInvoiceFromPayments } = require("./paymentController");
       await recalculateInvoiceFromPayments(invoice.invoiceNo);
+
+      // Sync payments to TrainingFee if linked
+      if (invoice.trainingFeeRef) {
+        await syncTrainingFeePayments(invoice.trainingFeeRef);
+      }
       
       // Log finance activity
       try {
@@ -596,6 +606,47 @@ async function stripeSuccess(req, res) {
   }
 }
 
+async function syncTrainingFeePayments(trainingFeeId) {
+  if (!trainingFeeId) return;
+  try {
+    const TrainingFee = require("../models/TrainingFee");
+    const Payment = require("../models/Payment");
+    const Invoice = require("../models/Invoice");
+
+    // Find all invoices linked to this TrainingFee
+    const invoices = await Invoice.find({ trainingFeeRef: trainingFeeId }).select("invoiceNo").lean();
+    const invoiceNos = invoices.map(i => i.invoiceNo);
+
+    // Sum all payments for these invoices
+    let totalPaidFromInvoices = 0;
+    if (invoiceNos.length > 0) {
+      const agg = await Payment.aggregate([
+        { $match: { invoiceRef: { $in: invoiceNos } } },
+        { $group: { _id: null, totalPaid: { $sum: "$amount" } } }
+      ]);
+      totalPaidFromInvoices = agg[0]?.totalPaid ?? 0;
+    }
+
+    // Update the TrainingFee record
+    const trainingFee = await TrainingFee.findById(trainingFeeId);
+    if (trainingFee) {
+      trainingFee.paidAmount = totalPaidFromInvoices;
+      const totalFees = trainingFee.totalFees || 0;
+      if (totalPaidFromInvoices >= totalFees && totalFees > 0) {
+        trainingFee.paymentStatus = "Paid";
+      } else if (totalPaidFromInvoices > 0) {
+        trainingFee.paymentStatus = "Partial";
+      } else {
+        trainingFee.paymentStatus = "Pending";
+      }
+      await trainingFee.save();
+      console.log(`[Sync] Updated TrainingFee ${trainingFeeId} paidAmount to ₹${totalPaidFromInvoices}`);
+    }
+  } catch (err) {
+    console.error("[Sync] Failed to sync training fee payments:", err);
+  }
+}
+
 module.exports = {
   list,
   getOne,
@@ -604,4 +655,5 @@ module.exports = {
   remove,
   payInvoice,
   stripeSuccess,
+  syncTrainingFeePayments,
 };
