@@ -649,7 +649,7 @@ router.delete('/:id', adminOnly, async (req, res) => {
   }
 });
 
-const pdfParse = require('pdf-parse');
+const { PDFParse } = require('pdf-parse');
 const { GoogleGenAI } = require('@google/genai');
 
 function fallbackParse(text) {
@@ -814,7 +814,8 @@ router.post('/parse-resume', (req, res, next) => {
 
     // Read file and parse text
     const fileBuffer = fs.readFileSync(filePath);
-    const textResult = await pdfParse(fileBuffer);
+    const pdf = new PDFParse({ data: fileBuffer });
+    const textResult = await pdf.getText();
     const text = textResult.text || '';
 
     // Structure variable to hold parsed data
