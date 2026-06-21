@@ -193,8 +193,8 @@ router.post('/intake', (req, res, next) => {
     await logHRActivity({
       candidateId: doc._id,
       candidateName: doc.name,
-      type: 'intake',
-      title: `New candidate added: ${doc.name}`,
+      type: 'candidate',
+      title: `Candidate added: ${doc.name}`,
       subtitle: `${doc.position || ''} · ${doc.source || ''}`,
       icon: 'person',
       performedBy: req.user?.name || hrName,

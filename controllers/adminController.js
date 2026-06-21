@@ -231,17 +231,19 @@ async function recentActivity(req, res) {
     });
 
     // 7. HR Activities (modern logs)
-    hrActivities.forEach(l => {
-      allActivities.push({
-        id: l.candidateId || l._id,
-        candidateId: l.candidateId,
-        type: l.type,
-        title: l.title,
-        subtitle: l.subtitle || '',
-        createdAt: l.createdAt,
-        timestamp: l.createdAt
+    hrActivities
+      .filter(l => l.type !== 'intake')
+      .forEach(l => {
+        allActivities.push({
+          id: l.candidateId || l._id,
+          candidateId: l.candidateId,
+          type: l.type,
+          title: l.title,
+          subtitle: l.subtitle || '',
+          createdAt: l.createdAt,
+          timestamp: l.createdAt
+        });
       });
-    });
 
     // 8. Legacy Candidates (HR candidate activity)
     candidates.forEach((c) => {
@@ -330,8 +332,18 @@ async function recentActivity(req, res) {
     // Sort all combined activities by date descending
     allActivities.sort((x, y) => new Date(y.createdAt) - new Date(x.createdAt));
 
+    // De-duplicate by candidateId/id + type
+    const seen = new Set();
+    const unique = [];
+    for (const item of allActivities) {
+      const key = `${item.candidateId || item.id || item._id || ''}-${item.type || ''}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(item);
+    }
+
     // Slice to the requested limit
-    const sliced = allActivities.slice(0, limit);
+    const sliced = unique.slice(0, limit);
 
     res.json({ activity: sliced });
   } catch (err) {

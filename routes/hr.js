@@ -75,25 +75,37 @@ router.get('/recent-activity', async (req, res) => {
       return { id: c._id, candidateId: c._id, type, title, subtitle, icon, sortDate, timestamp: sortDate };
     });
 
-    const modernActivity = logs.map(l => ({
-      id: l.candidateId || l._id,
-      candidateId: l.candidateId,
-      type: l.type,
-      title: l.title,
-      subtitle: [l.subtitle, formatDateTime(l.createdAt)].filter(Boolean).join(' · '),
-      icon: l.icon || 'person',
-      metadata: l.metadata || {},
-      sortDate: l.createdAt,
-      timestamp: l.createdAt
-    }));
+    const modernActivity = logs
+      .filter(l => l.type !== 'intake')
+      .map(l => ({
+        id: l.candidateId || l._id,
+        candidateId: l.candidateId,
+        type: l.type,
+        title: l.title,
+        subtitle: [l.subtitle, formatDateTime(l.createdAt)].filter(Boolean).join(' · '),
+        icon: l.icon || 'person',
+        metadata: l.metadata || {},
+        sortDate: l.createdAt,
+        timestamp: l.createdAt
+      }));
 
     // Merge and sort
     const combined = [...modernActivity, ...legacyActivity]
-      .sort((a, b) => new Date(b.sortDate) - new Date(a.sortDate))
-      .slice(0, limit)
-      .map(({ sortDate, ...item }) => item);
+      .sort((a, b) => new Date(b.sortDate) - new Date(a.sortDate));
 
-    res.json({ activity: combined });
+    // De-duplicate by candidateId + type
+    const seen = new Set();
+    const unique = [];
+    for (const item of combined) {
+      const key = `${item.candidateId || item.id || item._id}-${item.type}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(item);
+    }
+
+    const sliced = unique.slice(0, limit).map(({ sortDate, ...item }) => item);
+
+    res.json({ activity: sliced });
   } catch (err) {
     console.error('HR recent activity error:', err);
     res.status(500).json({ message: 'Failed to fetch recent activity' });
