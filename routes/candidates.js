@@ -649,7 +649,7 @@ router.delete('/:id', adminOnly, async (req, res) => {
   }
 });
 
-const { PDFParse } = require('pdf-parse');
+const pdfParse = require('pdf-parse');
 const { GoogleGenAI } = require('@google/genai');
 
 function fallbackParse(text) {
@@ -715,10 +715,10 @@ function fallbackParse(text) {
   // 5. Degree & College
   let degree = '';
   let college = '';
-  const degreeRegex = /(B\.?Tech|M\.?Tech|B\.?S|M\.?S|B\.?E|M\.?E|BCA|MCA|MBA|Ph\.?D|Bachelor|Master)/i;
-  const degMatch = text.match(degreeRegex);
-  if (degMatch) {
-    degree = degMatch[0];
+  const degreeRegex = /\b(B\.?Tech|M\.?Tech|B\.?S|M\.?S|B\.?E|M\.?E|BCA|MCA|MBA|Ph\.?D|Bachelors?|Masters?)\b/gi;
+  const degMatches = text.match(degreeRegex) || [];
+  if (degMatches.length > 0) {
+    degree = degMatches[0];
   }
   
   const collegeKeywords = ['university', 'college', 'institute', 'school', 'academy', 'iit', 'nit', 'bits'];
@@ -741,10 +741,13 @@ function fallbackParse(text) {
 
   // 7. Role
   let role = '';
-  const roleKeywords = ['developer', 'engineer', 'analyst', 'manager', 'consultant', 'designer', 'lead', 'architect'];
+  const roleRegex = /\b(developer|engineer|analyst|manager|consultant|designer|lead|architect)s?\b/i;
+  const academicRegex = /\b(education|academic|degree|bachelors?|masters?|university|college|school|b\.?tech|m\.?tech|b\.?e|m\.?e|b\.?s|m\.?s|bca|mca|mba|ph\.?d|cgpa|gpa|hsc|ssc|intermediate|matriculation)\b/i;
   for (const line of lines) {
     const lower = line.toLowerCase();
-    if (roleKeywords.some(kw => lower.includes(kw)) && !lower.includes('experience') && !lower.includes('education') && line.length < 50) {
+    if (roleRegex.test(lower) && 
+        !academicRegex.test(lower) &&
+        line.length < 80) {
       role = line;
       break;
     }
@@ -811,8 +814,7 @@ router.post('/parse-resume', (req, res, next) => {
 
     // Read file and parse text
     const fileBuffer = fs.readFileSync(filePath);
-    const pdf = new PDFParse({ data: fileBuffer });
-    const textResult = await pdf.getText();
+    const textResult = await pdfParse(fileBuffer);
     const text = textResult.text || '';
 
     // Structure variable to hold parsed data
