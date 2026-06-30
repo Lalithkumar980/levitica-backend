@@ -42,6 +42,7 @@ const fixedOrigins = [
 ];
 
 /** Extra origins from env: ALLOWED_ORIGINS=a.com,b.com or single FRONTEND_URL */
+
 function envOriginsList() {
   const raw = process.env.ALLOWED_ORIGINS || process.env.FRONTEND_URL || "";
   return raw
