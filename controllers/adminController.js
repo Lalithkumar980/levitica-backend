@@ -11,7 +11,7 @@ const HRActivity = require('../models/HRActivity');
 const FinanceActivity = require('../models/FinanceActivity');
 const Invoice = require('../models/Invoice');
 const Payment = require('../models/Payment');
-const Expense = require('../models/Expense');
+const Expense = require('../models/Expense'); 
 
 
 const { validateRoleAssignment } = require('../utils/roleValidator');

@@ -231,6 +231,19 @@ async function convert(req, res) {
       const contactEmail = lead.email || `unknown-${lead._id}@example.com`;
       const ownerId = lead.owner || lead.owner_id || req.user._id;
 
+      if (!lead.company_id && lead.company) {
+        let comp = await Company.findOne({ name: new RegExp('^' + lead.company.trim() + '$', 'i') });
+        if (!comp) {
+          comp = await Company.create({
+            name: lead.company.trim(),
+            owner: ownerId,
+            industry: lead.industry || undefined,
+            companySize: lead.companySize || 'SMB',
+          });
+        }
+        lead.company_id = comp._id;
+      }
+
       let contactDoc = await Contact.findOne({ company_id: lead.company_id, email: contactEmail });
       if (!contactDoc) {
         contactDoc = await Contact.create({
@@ -352,6 +365,19 @@ async function promote(req, res) {
     const dateObj = new Date();
     const formattedMonthYear = dateObj.toLocaleString('en-US', { month: 'short', year: 'numeric' });
     const dealName = `${companyName} – ${ownerName} – ${formattedMonthYear}`;
+
+    if (!lead.company_id && lead.company) {
+      let comp = await Company.findOne({ name: new RegExp('^' + lead.company.trim() + '$', 'i') });
+      if (!comp) {
+        comp = await Company.create({
+          name: lead.company.trim(),
+          owner: targetOwnerId,
+          industry: lead.industry || undefined,
+          companySize: lead.companySize || 'SMB',
+        });
+      }
+      lead.company_id = comp._id;
+    }
 
     // Get or Create Contact
     const contactEmail = lead.email || `unknown-${lead._id}@example.com`;
