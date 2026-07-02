@@ -213,7 +213,7 @@ async function uploadLeadsCsv(req, res) {
     let duplicates = 0;
     const existingByPhone = new Set();
     const existingByEmail = new Set();
-    const existingLeads = await Lead.find({}, { phone: 1, email: 1 }).lean();
+    const existingLeads = await Lead.find({ isDeleted: { $ne: true } }, { phone: 1, email: 1 }).lean();
     existingLeads.forEach((l) => {
       if (l.phone) existingByPhone.add(String(l.phone).trim().toLowerCase());
       if (l.email) existingByEmail.add(String(l.email).trim().toLowerCase());
@@ -310,7 +310,7 @@ async function importLeadsBody(req, res) {
     const errors = [];
     const existingByPhone = new Set();
     const existingByEmail = new Set();
-    const existingLeads = await Lead.find({}, { phone: 1, email: 1 }).lean();
+    const existingLeads = await Lead.find({ isDeleted: { $ne: true } }, { phone: 1, email: 1 }).lean();
     existingLeads.forEach((l) => {
       if (l.phone) existingByPhone.add(String(l.phone).trim().toLowerCase());
       if (l.email) existingByEmail.add(String(l.email).trim().toLowerCase());
