@@ -376,6 +376,20 @@ app.use((err, req, res, next) => {
 async function start() {
   await connectDB();
 
+  // Migrate any existing users from Sales Rep to Sales Representative
+  try {
+    const User = require("./models/User");
+    const result = await User.updateMany(
+      { role: "Sales Rep" },
+      { $set: { role: "Sales Representative" } }
+    );
+    if (result.modifiedCount > 0) {
+      console.log(`Migrated ${result.modifiedCount} users from Sales Rep to Sales Representative`);
+    }
+  } catch (err) {
+    console.error("Error migrating roles:", err);
+  }
+
   // Run onboarding synchronization
   try {
     const { syncAllOnboardingToCandidates } = require("./controllers/onboardingController");
