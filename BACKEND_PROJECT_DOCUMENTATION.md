@@ -188,11 +188,11 @@ Roles used:
 - `HR Management`
 - `Sales Manager`
 - `Finance Management`
-- `Sales Rep`
+- `Sales Representative`
 
 Important behavior:
 - JWT token required for protected modules.
-- `roles.js` applies rep isolation logic (`owner` filtering) so Sales Reps only see their own records.
+- `roles.js` applies rep isolation logic (`owner` filtering) so Sales Representatives only see their own records.
 - Finance routes restricted to `Finance Management` or `Admin`.
 - Admin-only operations (user management/delete actions) are guarded.
 

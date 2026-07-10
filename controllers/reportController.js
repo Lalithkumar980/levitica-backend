@@ -70,7 +70,7 @@ async function pipeline(req, res) {
 
 async function repPerformance(req, res) {
   try {
-    const reps = await User.find({ role: 'Sales Rep' }).select('_id name email').lean();
+    const reps = await User.find({ role: 'Sales Representative' }).select('_id name email').lean();
     const result = await Promise.all(
       reps.map(async (rep) => {
         const repId = rep._id;

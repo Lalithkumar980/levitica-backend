@@ -41,7 +41,7 @@ function formatUserForFrontend(userDoc, requesterIsAdmin = false) {
   else if (u.role === 'HR Management') roleClass = "bg-violet-100 text-violet-700";
   else if (u.role === 'Sales Manager') roleClass = "bg-emerald-100 text-emerald-700";
   else if (u.role === 'Finance Management') roleClass = "bg-sky-100 text-sky-700";
-  else if (u.role === 'Sales Rep') roleClass = "bg-amber-100 text-amber-700";
+  else if (u.role === 'Sales Representative') roleClass = "bg-amber-100 text-amber-700";
 
   // Calculate initials if virtual is not resolved
   let initials = u.initials;
@@ -173,7 +173,7 @@ router.post('/', verifyToken, adminOnly, async (req, res) => {
       exp = true;
       viewReports = true;
       modules = ['/dashboard', '/finance/invoices', '/finance/expenses', '/finance/payments', '/finance/pl-report'];
-    } else if (role === 'Sales Rep') {
+    } else if (role === 'Sales Representative') {
       viewReports = true;
       modules = ['/dashboard', '/leads', '/contacts', '/companies', '/deals', '/activity', '/call-tracking', '/email-log', '/documents'];
     } else if (role === 'Read Only') {
@@ -285,7 +285,7 @@ router.put('/:id', verifyToken, adminOnly, async (req, res) => {
         exp = true;
         viewReports = true;
         modules = ['/dashboard', '/finance/invoices', '/finance/expenses', '/finance/payments', '/finance/pl-report'];
-      } else if (role === 'Sales Rep') {
+      } else if (role === 'Sales Representative') {
         viewReports = true;
         modules = ['/dashboard', '/leads', '/contacts', '/companies', '/deals', '/activity', '/call-tracking', '/email-log', '/documents'];
       } else if (role === 'Read Only') {

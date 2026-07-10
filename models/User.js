@@ -9,8 +9,8 @@ const UserSchema = new mongoose.Schema({
   passwordEncrypted: { type: String },
   role: {
     type: String,
-    enum: ['Admin', 'HR Management', 'Sales Manager', 'Finance Management', 'Sales Rep', 'Read Only'],
-    default: 'Sales Rep'
+    enum: ['Admin', 'HR Management', 'Sales Manager', 'Finance Management', 'Sales Representative', 'Read Only'],
+    default: 'Sales Representative'
   },
   department: { type: String, default: 'Sales' },
   viewAll: { type: Boolean, default: false },

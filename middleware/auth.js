@@ -36,7 +36,7 @@ function requireAdmin(req, res, next) {
 }
 
 // --- 2.4 Reusable role middleware (use after authenticate) ---
-// Role values match User model: 'Admin' | 'HR Management' | 'Sales Manager' | 'Finance Management' | 'Sales Rep'
+// Role values match User model: 'Admin' | 'HR Management' | 'Sales Manager' | 'Finance Management' | 'Sales Representative'
 
 /** 1. Admin only — 403 if not Admin. Use for: delete, /admin/users. */
 function adminOnly(req, res, next) {

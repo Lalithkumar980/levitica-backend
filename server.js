@@ -12,8 +12,10 @@ app.set("trust proxy", 1);
 const PORT = process.env.PORT || 5001;
 
 /** Allow typical home/LAN dev URLs (new Wi‑Fi = new IP; no need to edit this each time). */
+
 function isPrivateLanOrigin(origin) {
   if (!origin || typeof origin !== "string") return false;
+
   try {
     const u = new URL(origin);
     if (u.protocol !== "http:") return false;

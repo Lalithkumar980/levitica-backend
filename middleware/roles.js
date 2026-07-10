@@ -1,6 +1,6 @@
 /**
  * Role-based access control — SalesPulse CRM
- * Aligns with: Admin | Manager (Sales Manager) | Sales Rep
+ * Aligns with: Admin | Manager (Sales Manager) | Sales Representative
  *
  * Capability matrix:
  * - View ALL: Admin, Manager ✅  |  Rep: own only
@@ -14,12 +14,12 @@
  * - Dashboard: Admin, Manager (leaderboard) ✅  |  Rep: own KPIs only
  *
  * 2.2 Rep vs Rep — Isolation Rule
- * Sales Rep 1 and Sales Rep 2 are completely isolated. Rep 1 cannot see Rep 2's
+ * Sales Representative 1 and Sales Representative 2 are completely isolated. Rep 1 cannot see Rep 2's
  * leads, deals, contacts, activities, tasks, or documents — and vice versa.
  * This is enforced at the BACKEND query level using the "owner" field, not just frontend.
  *
  * For every GET (list) on rep-scoped resources, you MUST use scopeQueryByRole() (or
- * applyRepIsolation()) so that when req.user.role === "Sales Rep", the filter
+ * applyRepIsolation()) so that when req.user.role === "Sales Representative", the filter
  * includes { owner: req.user._id }. Example:
  *
  *   const filter = scopeQueryByRole(req, { status: 'active' });
@@ -41,7 +41,7 @@
 const ROLES = {
   ADMIN: 'Admin',
   MANAGER: 'Sales Manager',
-  REP: 'Sales Rep',
+  REP: 'Sales Representative',
   READ_ONLY: 'Read Only',
 };
 
@@ -55,7 +55,7 @@ function canViewAll(req) {
   );
 }
 
-/** True if user is a Sales Rep (own records only) */
+/** True if user is a Sales Representative (own records only) */
 function isRep(req) {
   return req.user && req.user.role === ROLES.REP;
 }
@@ -91,7 +91,7 @@ function canReassignOwner(req) {
  * REP ISOLATION — Use for EVERY GET (list) on rep-scoped resources.
  * Returns a Mongoose query filter:
  * - Admin / Manager: no extra filter (view all records).
- * - Sales Rep: adds filter.owner = req.user._id (ObjectId) so Rep sees only own records.
+ * - Sales Representative: adds filter.owner = req.user._id (ObjectId) so Rep sees only own records.
  *
  * Apply to: leads, deals, contacts, activities, tasks, documents (and any other rep-scoped collection).
  *

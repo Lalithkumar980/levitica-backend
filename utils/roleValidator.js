@@ -9,14 +9,14 @@
  *
  * Unrestricted roles (multiple users allowed):
  *   - Finance Management
- *   - Sales Rep
+ *   - Sales Representative
  */
 
 const User = require('../models/User');
 
 // Define which roles can only have a single user
 const SINGLE_USER_ROLES = ['Admin', 'HR Management', 'Sales Manager'];
-const MULTI_USER_ROLES = ['Finance Management', 'Sales Rep'];
+const MULTI_USER_ROLES = ['Finance Management', 'Sales Representative'];
 
 /**
  * Check if a role can only have a single user
@@ -102,7 +102,7 @@ function getRoleInfo() {
       'HR Management': 'Only 1 user allowed',
       'Sales Manager': 'Only 1 user allowed',
       'Finance Management': 'Multiple users allowed',
-      'Sales Rep': 'Multiple users allowed',
+      'Sales Representative': 'Multiple users allowed',
     },
   };
 }

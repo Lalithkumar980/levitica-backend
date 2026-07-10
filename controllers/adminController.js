@@ -16,7 +16,7 @@ const Expense = require('../models/Expense');
 
 const { validateRoleAssignment } = require('../utils/roleValidator');
 
-const ALLOWED_ROLES = ['Admin', 'HR Management', 'Sales Manager', 'Finance Management', 'Sales Rep'];
+const ALLOWED_ROLES = ['Admin', 'HR Management', 'Sales Manager', 'Finance Management', 'Sales Representative'];
 const ROLE_ALIASES = {
   admin: 'Admin',
   'hr management': 'HR Management',
@@ -25,8 +25,8 @@ const ROLE_ALIASES = {
   'sales manager': 'Sales Manager',
   'finance management': 'Finance Management',
   finance: 'Finance Management',
-  rep: 'Sales Rep',
-  'sales rep': 'Sales Rep',
+  rep: 'Sales Representative',
+  'sales rep': 'Sales Representative',
 };
 
 function resolveRole(value) {
@@ -54,7 +54,7 @@ async function updateUserRole(req, res) {
     const roleValue = resolveRole(req.body?.role);
     if (!roleValue) {
       return res.status(400).json({
-        message: 'Invalid role. Allowed: Admin, HR Management, Sales Manager, Finance Management, Sales Rep (or alias: manager, rep, hr, finance)',
+        message: 'Invalid role. Allowed: Admin, HR Management, Sales Manager, Finance Management, Sales Representative (or alias: manager, rep, hr, finance)',
       });
     }
 
