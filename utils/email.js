@@ -125,10 +125,10 @@ async function sendOnboardingInvite({ to, inviteUrl, candidateName, expiresAt, c
     'We look forward to receiving your submission and welcoming you to Levitica Technologies Pvt Ltd.',
     '',
     'BEST REGARDS,',
-    'HR Team',
+    'Baluguri Ashritha',
     'Levitica Technologies Pvt Ltd',
     'Email: info@leviticatechnologies.com',
-    'Phone: +91 9032503559',
+    'Phone: +91 9032503559.',
   ].join('\n');
 
   const html = `
