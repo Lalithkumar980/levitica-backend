@@ -124,7 +124,7 @@ async function sendOnboardingInvite({ to, inviteUrl, candidateName, expiresAt, c
     '',
     'We look forward to receiving your submission and welcoming you to Levitica Technologies Pvt Ltd.',
     '',
-    'BEST REGARDS,',
+    'Warm Regards,',
     'Baluguri Ashritha',
     'Levitica Technologies Pvt Ltd',
     'Email: info@leviticatechnologies.com',
@@ -145,7 +145,7 @@ async function sendOnboardingInvite({ to, inviteUrl, candidateName, expiresAt, c
     <p>Email: <a href="mailto:info@leviticatechnologies.com">info@leviticatechnologies.com</a><br/>
     Phone: +91 9032503559</p>
     <p>We look forward to receiving your submission and welcoming you to Levitica Technologies Pvt Ltd.</p>
-    <p>BEST REGARDS,</p>
+    <p><strong>Warm Regards,</strong></p>
     <p style="text-align: left;">
       <img src="${companyLogoUrl}" alt="Company Logo" width="130" style="border: none; display: inline-block; pointer-events: none; user-select: none;" />
     </p>
@@ -253,11 +253,11 @@ async function sendOfferLetterEmail({
     '',
     'We look forward to welcoming you to the Levitica family and beginning an exciting journey of growth and innovation together.',
     '',
-    'BEST REGARDS,',
-    'HR Team',
+    'Warm Regards,',
+    'Baluguri Ashritha',
     'Levitica Technologies Pvt Ltd',
     'Email: info@leviticatechnologies.com',
-    'Phone: +91 9032503559',
+    'Phone: +91 9032503559.',
   ].join('\n');
 
   const html = `
@@ -274,7 +274,7 @@ async function sendOfferLetterEmail({
     <p><strong>Note:</strong> We also request you to carry your original certificates including your 10th and Intermediate mark sheets for verification purposes, along with one set of Xerox copies of all your certificates. Additionally, please bring one passport-size photograph in hard copy and a soft copy of the same.</p>
     <p>Should you have any questions or need any clarification, please feel free to reach out. We will be happy to assist you.</p>
     <p>We look forward to welcoming you to the Levitica family and beginning an exciting journey of growth and innovation together.</p>
-    <p>BEST REGARDS,</p>
+    <p><strong>Warm Regards,</strong></p>
     <p style="text-align: left;">
       <img src="${companyLogoUrl}" alt="Company Logo" width="130" style="border: none; display: inline-block; pointer-events: none; user-select: none;" />
     </p>
