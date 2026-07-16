@@ -150,7 +150,7 @@ async function sendOnboardingInvite({ to, inviteUrl, candidateName, expiresAt, c
       <img src="${companyLogoUrl}" alt="Company Logo" width="130" style="border: none; display: inline-block; pointer-events: none; user-select: none;" />
     </p>
     <p>
-      HR Team<br/>
+      Baluguri Ashritha<br/>
       Levitica Technologies Pvt Ltd<br/>
       Email: info@leviticatechnologies.com<br/>
       Phone: +91 9032503559
@@ -279,7 +279,7 @@ async function sendOfferLetterEmail({
       <img src="${companyLogoUrl}" alt="Company Logo" width="130" style="border: none; display: inline-block; pointer-events: none; user-select: none;" />
     </p>
     <p>
-      HR Team<br/>
+      Baluguri Ashritha<br/>
       Levitica Technologies Pvt Ltd<br/>
       Email: info@leviticatechnologies.com<br/>
       Phone: +91 9032503559
