@@ -35,6 +35,13 @@ function initialsFromName(name) {
     .slice(0, 2);
   return parts || '—';
 }
+function formatToDDMMYYYY(dateStr) {
+  if (typeof dateStr === 'string' && dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    const parts = dateStr.split('-');
+    return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  }
+  return dateStr;
+}
 
 function leanToClient(doc) {
   const o = { ...doc, id: doc._id.toString() };
@@ -44,6 +51,11 @@ function leanToClient(doc) {
   // Align list/UI: terminal reject is one concept across stage + offer (response shape only).
   if (o.offer === 'Rejected' && o.pipelineStage !== 'Rejected') o.pipelineStage = 'Rejected';
   if (o.pipelineStage === 'Rejected') o.offer = 'Rejected';
+  
+  // Normalize dates to DD-MM-YYYY format
+  if (o.interviewDate) o.interviewDate = formatToDDMMYYYY(o.interviewDate);
+  if (o.joiningDate) o.joiningDate = formatToDDMMYYYY(o.joiningDate);
+  
   return o;
 }
 
