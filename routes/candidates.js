@@ -563,7 +563,13 @@ router.post('/', async (req, res) => {
 });
 
 /** PUT /api/candidates/:id — update single candidate */
-router.put('/:id', async (req, res) => {
+router.put('/:id', (req, res, next) => {
+  resumeUpload(req, res, (err) => {
+    // If it's not multipart, multer will just pass it through, but if there's an error it will catch it
+    if (err) return res.status(400).json({ message: err.message || 'Upload failed' });
+    next();
+  });
+}, async (req, res) => {
   try {
     const { id } = req.params;
     if (!isValidObjectId(id)) {
@@ -580,7 +586,7 @@ router.put('/:id', async (req, res) => {
     };
     assign('name', body.name);
     assign('note', body.note);
-    assign('position', body.position);
+    assign('position', body.position || body.role);
     assign('dept', body.dept);
     assign('interviewDate', body.interviewDate);
     assign('came', body.came);
@@ -595,27 +601,46 @@ router.put('/:id', async (req, res) => {
     assign('recruiter', body.recruiter);
     assign('email', body.email);
     assign('phone', body.phone);
-    if (body.candidateType === 'fresher' || body.candidateType === 'experienced') assign('candidateType', body.candidateType);
+    if (body.type === 'fresher' || body.type === 'experienced' || body.candidateType === 'fresher' || body.candidateType === 'experienced') {
+       assign('candidateType', body.type || body.candidateType);
+    }
     assign('location', body.location);
-    if (body.expYears !== undefined) set.expYears = Number(body.expYears) || 0;
-    if (body.expectedSalaryLpa !== undefined) set.expectedSalaryLpa = Number(body.expectedSalaryLpa) || 0;
-    if (body.currentCTCLpa !== undefined) set.currentCTCLpa = Number(body.currentCTCLpa) || 0;
-    assign('companyName', body.companyName);
+    if (body.exp !== undefined || body.expYears !== undefined) set.expYears = Number(body.exp || body.expYears) || 0;
+    if (body.salary !== undefined || body.expectedSalaryLpa !== undefined) set.expectedSalaryLpa = Number(body.salary || body.expectedSalaryLpa) || 0;
+    if (body.currentCTC !== undefined || body.currentCTCLpa !== undefined) set.currentCTCLpa = Number(body.currentCTC || body.currentCTCLpa) || 0;
+    assign('companyName', body.company || body.companyName);
     assign('prevRoles', body.prevRoles);
-    if (body.skills !== undefined) set.skills = Array.isArray(body.skills) ? body.skills : [];
+    
+    if (body.skills !== undefined) {
+      if (typeof body.skills === 'string') {
+         set.skills = body.skills.split(',').map(s => s.trim()).filter(Boolean);
+      } else if (Array.isArray(body.skills)) {
+         set.skills = body.skills;
+      }
+    }
+    
     assign('degree', body.degree);
     assign('college', body.college);
-    assign('graduationYear', body.graduationYear);
+    assign('graduationYear', body.year || body.graduationYear);
     assign('source', body.source);
-    assign('refDetail', body.refDetail);
+    assign('refDetail', body.ref || body.refDetail);
+    if (body.hr) set['recruiter.name'] = body.hr;
+    
     if (body.pipelineStage !== undefined && PIPELINE_STAGES.includes(body.pipelineStage)) {
       set.pipelineStage = body.pipelineStage;
     }
 
-    const nextResumeUrl = body.resumeUrl === undefined ? undefined : String(body.resumeUrl).trim();
+    let nextResumeUrl = body.resumeUrl === undefined ? undefined : String(body.resumeUrl).trim();
+    let nextResumeFilename = body.resumeFilename === undefined ? undefined : body.resumeFilename;
+
+    if (req.file) {
+      nextResumeUrl = `/api/uploads/resumes/${req.file.filename}`;
+      nextResumeFilename = req.file.originalname;
+    }
+
     const hasNewResume = Boolean(nextResumeUrl) && String(existing.resumeUrl || '').trim() !== nextResumeUrl;
-    assign('resumeUrl', nextResumeUrl);
-    assign('resumeFilename', body.resumeFilename);
+    if (nextResumeUrl !== undefined) assign('resumeUrl', nextResumeUrl);
+    if (nextResumeFilename !== undefined) assign('resumeFilename', nextResumeFilename);
 
     const doc = await Candidate.findByIdAndUpdate(id, { $set: set }, { new: true, runValidators: true });
     if (!doc) return res.status(404).json({ message: 'Candidate not found' });

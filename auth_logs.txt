@@ -2,3 +2,7 @@
 [2026-07-01T10:09:29.922Z] Exchanging code for tokens...
 [2026-07-01T10:09:30.277Z] Tokens received: access_token, refresh_token, scope, token_type, refresh_token_expires_in, expiry_date
 [2026-07-01T10:09:30.281Z] Successfully wrote GOOGLE_REFRESH_TOKEN to .env
+[2026-07-27T04:01:45.835Z] Callback received. Error: "", Code length: 73
+[2026-07-27T04:01:45.839Z] Exchanging code for tokens...
+[2026-07-27T04:01:46.431Z] Tokens received: access_token, refresh_token, scope, token_type, refresh_token_expires_in, expiry_date
+[2026-07-27T04:01:46.435Z] Successfully wrote GOOGLE_REFRESH_TOKEN to .env
