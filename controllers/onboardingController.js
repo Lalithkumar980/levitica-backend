@@ -871,6 +871,17 @@ async function syncAllOnboardingToCandidates() {
     const Candidate = require('../models/Candidate');
     const Invitation = require('../models/Invitation');
     
+    // 0. Clean up any invalid 'Completed' statuses that have no joined OnboardingCandidate record
+    const candidates = await Candidate.find({ onboarding: 'Completed' });
+    for (const c of candidates) {
+      if (!c.email) continue;
+      const oc = await OnboardingCandidate.findOne({ email: String(c.email).toLowerCase().trim() });
+      if (!oc || oc.joiningStatus !== 'Joined') {
+        c.onboarding = oc ? 'Pending' : null;
+        await c.save();
+      }
+    }
+    
     // 1. Sync all invitations to Pending onboarding
     const invitations = await Invitation.find().lean();
     console.log(`[sync] Syncing ${invitations.length} invitations...`);
