@@ -123,8 +123,8 @@ async function makeFilePublicLink(drive, fileId) {
  */
 function buildFileViewUrl(fileId) {
   // Use thumbnail URL — works without CORS and doesn't redirect through Drive's virus-check page.
-  // sz=s400 gives up to 400px dimension.
-  return `https://lh3.googleusercontent.com/d/${fileId}=s400`;
+  // sz=s0 gives original size for full clarity.
+  return `https://lh3.googleusercontent.com/d/${fileId}=s0`;
 }
 
 /**
