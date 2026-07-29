@@ -403,30 +403,39 @@ async function listSubmissions(req, res) {
       .limit(limit)
       .lean();
 
-    const submissions = rows.map((r) => ({
-      id: String(r._id),
-      name: r.name || '',
-      email: r.email || '',
-      createdAt: r.createdAt,
-      applicationMode: r.applicationMode || (r.formData && r.formData.mode) || null,
-      verificationStatus: normalizeVerificationStatus(r.verificationStatus),
-      verificationNotes: typeof r.verificationNotes === 'string' ? r.verificationNotes : '',
-      verificationUpdatedAt: r.verificationUpdatedAt || null,
-      verificationUpdatedByName: r.verificationUpdatedByName || '',
-      verificationUpdatedByEmail: r.verificationUpdatedByEmail || '',
-      documentSlots: Array.isArray(r.documentSlots) ? r.documentSlots : [],
-      formData: r.formData || {},
-      joiningDate: r.joiningDate || '',
-      role: r.role || '',
-      joiningStatus: r.joiningStatus || 'Pending',
-      joiningChecklist: r.joiningChecklist || {
-        documentsVerified: false,
-        joiningReportSigned: false,
-        idCardIssued: false,
-        assetAssigned: false,
-        bankDetailsSubmitted: false,
-      },
-    }));
+    const submissions = rows.map((r) => {
+      // Fix old document URLs dynamically
+      const fixedDocumentSlots = (Array.isArray(r.documentSlots) ? r.documentSlots : []).map(slot => ({
+        ...slot,
+        fileUrl: slot.fileUrl ? slot.fileUrl.replace('=s400', '=s0') : slot.fileUrl,
+        webUrl: slot.webUrl ? slot.webUrl.replace('=s400', '=s0') : slot.webUrl,
+      }));
+
+      return {
+        id: String(r._id),
+        name: r.name || '',
+        email: r.email || '',
+        createdAt: r.createdAt,
+        applicationMode: r.applicationMode || (r.formData && r.formData.mode) || null,
+        verificationStatus: normalizeVerificationStatus(r.verificationStatus),
+        verificationNotes: typeof r.verificationNotes === 'string' ? r.verificationNotes : '',
+        verificationUpdatedAt: r.verificationUpdatedAt || null,
+        verificationUpdatedByName: r.verificationUpdatedByName || '',
+        verificationUpdatedByEmail: r.verificationUpdatedByEmail || '',
+        documentSlots: fixedDocumentSlots,
+        formData: r.formData || {},
+        joiningDate: r.joiningDate || '',
+        role: r.role || '',
+        joiningStatus: r.joiningStatus || 'Pending',
+        joiningChecklist: r.joiningChecklist || {
+          documentsVerified: false,
+          joiningReportSigned: false,
+          idCardIssued: false,
+          assetAssigned: false,
+          bankDetailsSubmitted: false,
+        },
+      };
+    });
     return res.json({ submissions });
   } catch (err) {
     console.error('[onboarding] list submissions failed', err instanceof Error ? err.message : err);
