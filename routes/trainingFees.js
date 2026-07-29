@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const TrainingFee = require('../models/TrainingFee');
+const { logHRActivity } = require('../utils/hrLogger');
 
 function toNumber(v) {
   if (v === undefined || v === null) return undefined;
@@ -115,6 +116,18 @@ router.post('/', async (req, res) => {
       notes: (body.notes || '').trim(),
       paymentProofs: Array.isArray(body.paymentProofs) ? body.paymentProofs : [],
     });
+
+    // Log HR Activity so admin/HR receive a real-time notification
+    logHRActivity({
+      candidateId: doc._id.toString(),
+      candidateName: doc.candidateName || 'Unknown',
+      type: 'payment',
+      title: `Training Candidate Added: ${doc.candidateName || 'Unknown'}`,
+      subtitle: `Course: ${doc.course || 'N/A'}`,
+      icon: 'banknote',
+      performedBy: 'System',
+    });
+
     res.status(201).json(addBalance(doc));
   } catch (err) {
     console.error('Training fee create error:', err);
