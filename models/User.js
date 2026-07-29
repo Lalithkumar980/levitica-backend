@@ -35,6 +35,7 @@ const UserSchema = new mongoose.Schema({
   skills: { type: String },
   hobbies: { type: String },
   bio: { type: String },
+  hiddenNotifications: [{ type: String }],
 }, {
   timestamps: true
 });

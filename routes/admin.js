@@ -9,6 +9,7 @@ router.get('/users', adminController.listUsers);
 router.put('/users/:id/role', adminController.updateUserRole);
 router.get('/users/:id/stats', adminController.getUserStats);
 router.get('/recent-activity', adminController.recentActivity);
+router.post('/recent-activity/hide', adminController.hideNotification);
 
 module.exports = router;
 ``

@@ -335,9 +335,11 @@ async function recentActivity(req, res) {
     // De-duplicate by candidateId/id + type
     const seen = new Set();
     const unique = [];
+    const hiddenSet = new Set(req.user?.hiddenNotifications || []);
     for (const item of allActivities) {
       const key = `${item.candidateId || item.id || item._id || ''}-${item.type || ''}`;
       if (seen.has(key)) continue;
+      if (hiddenSet.has(key)) continue;
       seen.add(key);
       unique.push(item);
     }
@@ -352,9 +354,31 @@ async function recentActivity(req, res) {
   }
 }
 
+async function hideNotification(req, res) {
+  try {
+    const { key } = req.body;
+    if (!key) {
+      return res.status(400).json({ message: 'Notification key is required' });
+    }
+    const user = req.user;
+    if (!user.hiddenNotifications) {
+      user.hiddenNotifications = [];
+    }
+    if (!user.hiddenNotifications.includes(key)) {
+      user.hiddenNotifications.push(key);
+      await user.save();
+    }
+    res.json({ message: 'Notification hidden successfully' });
+  } catch (err) {
+    console.error('Admin hide notification error:', err);
+    res.status(500).json({ message: 'Failed to hide notification' });
+  }
+}
+
 module.exports = {
   listUsers,
   updateUserRole,
   getUserStats,
   recentActivity,
+  hideNotification,
 };
