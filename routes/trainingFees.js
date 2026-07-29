@@ -164,6 +164,18 @@ router.put('/:id', async (req, res) => {
     }
     const doc = await TrainingFee.findByIdAndUpdate(req.params.id, { $set: set }, { new: true });
     if (!doc) return res.status(404).json({ message: 'Record not found' });
+
+    // Log HR Activity so admin/HR receive a real-time notification
+    logHRActivity({
+      candidateId: doc._id.toString(),
+      candidateName: doc.candidateName || 'Unknown',
+      type: 'payment',
+      title: `Training Candidate Updated: ${doc.candidateName || 'Unknown'}`,
+      subtitle: `Course: ${doc.course || 'N/A'}`,
+      icon: 'banknote',
+      performedBy: 'System',
+    });
+
     res.json(addBalance(doc));
   } catch (err) {
     console.error('Training fee update error:', err);
@@ -176,6 +188,18 @@ router.delete('/:id', async (req, res) => {
   try {
     const doc = await TrainingFee.findByIdAndDelete(req.params.id);
     if (!doc) return res.status(404).json({ message: 'Record not found' });
+
+    // Log HR Activity so admin/HR receive a real-time notification
+    logHRActivity({
+      candidateId: doc._id.toString(),
+      candidateName: doc.candidateName || 'Unknown',
+      type: 'payment',
+      title: `Training Candidate Deleted: ${doc.candidateName || 'Unknown'}`,
+      subtitle: `Course: ${doc.course || 'N/A'}`,
+      icon: 'banknote',
+      performedBy: 'System',
+    });
+
     res.json({ message: 'Deleted' });
   } catch (err) {
     console.error('Training fee delete error:', err);
