@@ -12,7 +12,7 @@ const HRActivitySchema = new mongoose.Schema(
     type: {
       type: String,
       required: true,
-      enum: ['intake', 'stage_change', 'feedback', 'onboarding', 'joining', 'document_verification', 'offer_letter', 'payment'],
+      enum: ['intake', 'stage_change', 'feedback', 'onboarding', 'joining', 'document_verification', 'offer_letter', 'payment', 'payment_updated', 'payment_deleted'],
     },
     title: { type: String, required: true },
     subtitle: { type: String },

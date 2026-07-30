@@ -169,7 +169,7 @@ router.put('/:id', async (req, res) => {
     logHRActivity({
       candidateId: doc._id.toString(),
       candidateName: doc.candidateName || 'Unknown',
-      type: 'payment',
+      type: 'payment_updated',
       title: `Training Candidate Updated: ${doc.candidateName || 'Unknown'}`,
       subtitle: `Course: ${doc.course || 'N/A'}`,
       icon: 'banknote',
@@ -193,7 +193,7 @@ router.delete('/:id', async (req, res) => {
     logHRActivity({
       candidateId: doc._id.toString(),
       candidateName: doc.candidateName || 'Unknown',
-      type: 'payment',
+      type: 'payment_deleted',
       title: `Training Candidate Deleted: ${doc.candidateName || 'Unknown'}`,
       subtitle: `Course: ${doc.course || 'N/A'}`,
       icon: 'banknote',
